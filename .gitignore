@@ -1,6 +1,7 @@
 # Compiled class file
 *.class
-
+push*
+merge*
 # Log file
 *.log
 

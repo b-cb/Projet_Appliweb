@@ -1,0 +1,6 @@
+git checkout main
+git pull
+git checkout batiste
+git merge main
+git push
+

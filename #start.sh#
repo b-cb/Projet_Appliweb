@@ -1,0 +1,66 @@
+#!/bin/bash
+
+echo "🚀 Lancement du projet Jeux de Cartes..."
+
+# Récupérer l'IP locale de la machine
+#!/bin/bash
+
+echo "🛑 Arrêt forcé des serveurs Jeux de Cartes..."
+
+# 1. Arrêt du Back-end (qui tourne sur le port 8080)
+if lsof -t -i:8080 > /dev/null 2>&1; then
+    echo "🔌 Libération du port 8080 (Back-end Spring Boot)..."
+    kill -9 $(lsof -t -i:8080) 2>/dev/null
+else
+    echo "✅ Le Back-end n'était pas en cours d'exécution."
+fi
+
+# 2. Arrêt du Front-end (qui tourne sur le port 5173 pour Vite/React)
+if lsof -t -i:5173 > /dev/null 2>&1; then
+    echo "⚛️ Libération du port 5173 (Front-end React)..."
+    kill -9 $(lsof -t -i:5173) 2>/dev/null
+else
+    echo "✅ Le Front-end n'était pas en cours d'exécution."
+fi
+
+# 3. Fermeture des ports dans le pare-feu (Sécurité)
+echo "🔒 Fermeture des ports 5173 et 8080 dans le pare-feu..."
+# On supprime les règles d'autorisation créées par start.sh
+sudo ufw delete allow 5173/tcp > /dev/null 2>&1
+sudo ufw delete allow 8080/tcp > /dev/null 2>&1
+echo "✅ Ports refermés avec succès."
+
+echo "🧹 Nettoyage terminé ! Tes processus sont arrêtés et tes ports sont sécurisés."LOCAL_IP=$(hostname -I | awk '{print $1}')
+
+# 1. Lancement du backend (Spring Boot) — écoute sur 0.0.0.0 par défaut
+echo "☕ Démarrage du Back-end (Spring Boot)..."
+cd backend-cartes
+./mvnw spring-boot:run &
+BACKEND_PID=$!
+cd ..
+
+# 2. Lancement du frontend (React/Vite) — --host pour écouter sur 0.0.0.0
+echo "⚛️ Démarrage du Front-end (React)..."
+cd frontend-cartes
+npm run dev -- --host &
+FRONTEND_PID=$!
+cd ..
+
+echo ""
+echo "✅ Les deux serveurs sont en cours de démarrage !"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🖥️  Accès local :"
+echo "   Front-end : http://localhost:5173"
+echo "   Back-end  : http://localhost:8080"
+echo ""
+echo "🌐 Accès réseau (autres PC) :"
+echo "   Front-end : http://${LOCAL_IP}:5173"
+echo "   Back-end  : http://${LOCAL_IP}:8080"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "⚠️ Appuie sur Ctrl+C pour tout arrêter proprement."
+
+# 3. Capture du Ctrl+C pour tuer les deux processus
+trap "echo -e '\n🛑 Arrêt des serveurs...'; kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; return 2>/dev/null || exit" SIGINT
+
+# On attend pour garder le terminal actif
+wait

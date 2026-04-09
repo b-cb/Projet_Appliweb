@@ -1,0 +1,109 @@
+package fr.enseeiht.jeux.dto;
+
+import java.util.List;
+
+/**
+ * Vue complète de l'état du jeu pour un joueur donné.
+ * Retourné par GET /api/partie/{id}/etat?utilisateurId=...
+ */
+public class EtatJeuDTO {
+
+    private Long partieId;
+    private String statut;          // EN_ENCHERE, EN_JEU, TERMINEE
+    private String atout;           // couleur de l'atout (null pendant les enchères)
+    private int contratValeur;
+    private String contratCouleur;
+    private int scoreA;
+    private int scoreB;
+    private int numPliCourant;
+
+    // Tour de jeu
+    private Long tourJoueurId;      // id du Joueur (pas Utilisateur) dont c'est le tour
+    private String tourPseudo;
+
+    // Ma main (uniquement pour l'utilisateur qui appelle)
+    private List<CarteDTO> maMain;
+    private Long monJoueurId;
+    private int monEquipe;
+
+    // Pli en cours (cartes déjà jouées dans le pli courant)
+    private List<CartePliDTO> pliCourant;
+
+    // Historique des enchères
+    private List<EnchereDTO> encheres;
+
+    // Résultat (si TERMINEE)
+    private ResultatDTO resultat;
+
+    public EtatJeuDTO() {}
+
+    // --- Getters / Setters ---
+
+    public Long getPartieId() { return partieId; }
+    public void setPartieId(Long partieId) { this.partieId = partieId; }
+
+    public String getStatut() { return statut; }
+    public void setStatut(String statut) { this.statut = statut; }
+
+    public String getAtout() { return atout; }
+    public void setAtout(String atout) { this.atout = atout; }
+
+    public int getContratValeur() { return contratValeur; }
+    public void setContratValeur(int contratValeur) { this.contratValeur = contratValeur; }
+
+    public String getContratCouleur() { return contratCouleur; }
+    public void setContratCouleur(String contratCouleur) { this.contratCouleur = contratCouleur; }
+
+    public int getScoreA() { return scoreA; }
+    public void setScoreA(int scoreA) { this.scoreA = scoreA; }
+
+    public int getScoreB() { return scoreB; }
+    public void setScoreB(int scoreB) { this.scoreB = scoreB; }
+
+    public int getNumPliCourant() { return numPliCourant; }
+    public void setNumPliCourant(int numPliCourant) { this.numPliCourant = numPliCourant; }
+
+    public Long getTourJoueurId() { return tourJoueurId; }
+    public void setTourJoueurId(Long tourJoueurId) { this.tourJoueurId = tourJoueurId; }
+
+    public String getTourPseudo() { return tourPseudo; }
+    public void setTourPseudo(String tourPseudo) { this.tourPseudo = tourPseudo; }
+
+    public List<CarteDTO> getMaMain() { return maMain; }
+    public void setMaMain(List<CarteDTO> maMain) { this.maMain = maMain; }
+
+    public Long getMonJoueurId() { return monJoueurId; }
+    public void setMonJoueurId(Long monJoueurId) { this.monJoueurId = monJoueurId; }
+
+    public int getMonEquipe() { return monEquipe; }
+    public void setMonEquipe(int monEquipe) { this.monEquipe = monEquipe; }
+
+    public List<CartePliDTO> getPliCourant() { return pliCourant; }
+    public void setPliCourant(List<CartePliDTO> pliCourant) { this.pliCourant = pliCourant; }
+
+    public List<EnchereDTO> getEncheres() { return encheres; }
+    public void setEncheres(List<EnchereDTO> encheres) { this.encheres = encheres; }
+
+    public ResultatDTO getResultat() { return resultat; }
+    public void setResultat(ResultatDTO resultat) { this.resultat = resultat; }
+
+    // --- Inner DTO : une carte dans le pli courant + qui l'a jouée ---
+    public static class CartePliDTO {
+        private CarteDTO carte;
+        private String pseudo;
+        private int equipe;
+
+        public CartePliDTO(CarteDTO carte, String pseudo, int equipe) {
+            this.carte = carte;
+            this.pseudo = pseudo;
+            this.equipe = equipe;
+        }
+
+        public CarteDTO getCarte() { return carte; }
+        public String getPseudo() { return pseudo; }
+        public int getEquipe() { return equipe; }
+        public void setCarte(CarteDTO carte) { this.carte = carte; }
+        public void setPseudo(String pseudo) { this.pseudo = pseudo; }
+        public void setEquipe(int equipe) { this.equipe = equipe; }
+    }
+}

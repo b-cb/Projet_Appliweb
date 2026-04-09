@@ -10,8 +10,9 @@ public class Enchere {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private int contrat;
-    private String couleur;
+    private int contrat;     // 0 si passe
+    private String couleur;  // null si passe
+    private boolean passe;   // true = le joueur a passé
 
     @JsonIgnore
     @ManyToOne(optional = false)
@@ -63,6 +64,14 @@ public class Enchere {
 
     public void setPreneur(Joueur preneur) {
         this.preneur = preneur;
+    }
+
+    public boolean isPasse() {
+        return passe;
+    }
+
+    public void setPasse(boolean passe) {
+        this.passe = passe;
     }
 
 }

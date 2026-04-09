@@ -13,6 +13,9 @@ public class Pli {
     private Long id;
 
     private int numTour;
+    private int gagnantEquipe;   // 1 ou 2
+    private int pointsPli;       // points attribués à ce pli
+    private int joueurOuvreurIndex; // index (0-3) du joueur qui a ouvert ce pli
 
     @JsonIgnore
     @ManyToOne(optional = false)
@@ -56,6 +59,30 @@ public class Pli {
 
     public void setCartesJouees(List<Carte> cartesJouees) {
         this.cartesJouees = cartesJouees;
+    }
+
+    public int getGagnantEquipe() {
+        return gagnantEquipe;
+    }
+
+    public void setGagnantEquipe(int gagnantEquipe) {
+        this.gagnantEquipe = gagnantEquipe;
+    }
+
+    public int getPointsPli() {
+        return pointsPli;
+    }
+
+    public void setPointsPli(int pointsPli) {
+        this.pointsPli = pointsPli;
+    }
+
+    public int getJoueurOuvreurIndex() {
+        return joueurOuvreurIndex;
+    }
+
+    public void setJoueurOuvreurIndex(int joueurOuvreurIndex) {
+        this.joueurOuvreurIndex = joueurOuvreurIndex;
     }
 
 }

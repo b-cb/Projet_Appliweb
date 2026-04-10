@@ -20,6 +20,8 @@ public class Utilisateur {
 
     private int scoreGlobal;
 
+    private boolean bot = false;
+
     @JsonIgnore
     @OneToMany(mappedBy = "utilisateur", cascade = CascadeType.ALL)
     private List<Joueur> joueurs = new ArrayList<>();
@@ -57,6 +59,14 @@ public class Utilisateur {
 
     public void setScoreGlobal(int scoreGlobal) {
         this.scoreGlobal = scoreGlobal;
+    }
+
+    public boolean isBot() {
+        return bot;
+    }
+
+    public void setBot(boolean bot) {
+        this.bot = bot;
     }
 
     public List<Joueur> getJoueurs() {

@@ -1,9 +1,13 @@
 package fr.enseeiht.jeux.service;
 
+import fr.enseeiht.jeux.config.BotInitializer;
+import fr.enseeiht.jeux.dto.*;
 import fr.enseeiht.jeux.exception.BusinessException;
 import fr.enseeiht.jeux.exception.ResourceNotFoundException;
 import fr.enseeiht.jeux.modele.*;
 import fr.enseeiht.jeux.repository.*;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -15,15 +19,24 @@ public class PartieService {
     private final JoueurRepository joueurRepository;
     private final UtilisateurRepository utilisateurRepository;
     private final CarteRepository carteRepository;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final JeuService jeuService;
+    private final BotService botService;
 
     public PartieService(PartieRepository partieRepository,
                          JoueurRepository joueurRepository,
                          UtilisateurRepository utilisateurRepository,
-                         CarteRepository carteRepository) {
+                         CarteRepository carteRepository,
+                         SimpMessagingTemplate messagingTemplate,
+                         JeuService jeuService,
+                         @Lazy BotService botService) {
         this.partieRepository = partieRepository;
         this.joueurRepository = joueurRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.carteRepository = carteRepository;
+        this.messagingTemplate = messagingTemplate;
+        this.jeuService = jeuService;
+        this.botService = botService;
     }
 
     public Partie creerPartie() {
@@ -32,6 +45,33 @@ public class PartieService {
         partie.setScoreA(0);
         partie.setScoreB(0);
         return partieRepository.save(partie);
+    }
+
+    /**
+     * Crée une partie, fait rejoindre les 3 bots, démarre immédiatement,
+     * puis déclenche le jeu automatique si le premier joueur est un bot.
+     */
+    public Partie creerEtDemarrerAvecBots(Long utilisateurId) {
+        // 1. Créer la partie
+        Partie partie = creerPartie();
+        Long partieId = partie.getId();
+
+        // 2. Le joueur humain rejoint en position 0
+        rejoindrePartie(partieId, utilisateurId);
+
+        // 3. Les 3 bots rejoignent dans l'ordre
+        for (String botPseudo : BotInitializer.BOT_PSEUDOS) {
+            Utilisateur bot = utilisateurRepository.findByPseudo(botPseudo)
+                    .orElseThrow(() -> new ResourceNotFoundException("Bot " + botPseudo + " introuvable."));
+            rejoindrePartie(partieId, bot.getId());
+        }
+
+        // 4. Démarrer la partie (distribue les cartes, passe EN_ENCHERE)
+        Partie demarree = demarrerPartie(partieId);
+
+        // 5. Si le joueur en position 0 est humain, pas besoin de déclencher les bots
+        // Le bot ne jouera qu'après que l'humain ait agi — déclenché dans JeuService
+        return demarree;
     }
 
     public List<Partie> listerParties() {
@@ -70,7 +110,16 @@ public class PartieService {
         joueur.setPosition(joueurs.size());
         joueur.setEquipe((joueurs.size() % 2) + 1);
 
-        return joueurRepository.save(joueur);
+        Joueur saved = joueurRepository.save(joueur);
+
+        // Push WebSocket sur topic commun
+        messagingTemplate.convertAndSend(
+                "/topic/partie/" + partieId,
+                EvenementJeuDTO.of(EvenementJeuDTO.Type.JOUEUR_REJOINT,
+                        JoueurDTO.fromEntity(saved))
+        );
+
+        return saved;
     }
 
     public Partie demarrerPartie(Long partieId) {
@@ -104,22 +153,60 @@ public class PartieService {
         Collections.shuffle(paquet);
 
         for (int i = 0; i < 4; i++) {
-            Joueur joueur = joueurs.get(i);
+            Joueur j = joueurs.get(i);
             List<Carte> main = paquet.subList(i * 8, (i + 1) * 8);
-            joueur.setCartesEnMain(new ArrayList<>(main));
-            joueurRepository.save(joueur);
+            j.setCartesEnMain(new ArrayList<>(main));
+            joueurRepository.save(j);
         }
 
-        // La partie passe en phase d'enchères (pas directement EN_JEU)
         partie.setStatut("EN_ENCHERE");
-        partie.setTourJoueurIndex(0); // le joueur en position 0 ouvre les enchères
+        partie.setTourJoueurIndex(0);
         partie.setPassesConsecutives(0);
         partie.setNumPliCourant(0);
-        return partieRepository.save(partie);
+        partieRepository.save(partie);
+
+        // Push WebSocket personnalisé par joueur
+        List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);
+        for (Joueur j : joueursActualises) {
+            EtatJeuDTO etat = jeuService.getEtatJeu(partieId, j.getUtilisateur().getId());
+            messagingTemplate.convertAndSend(
+                    "/topic/partie/" + partieId + "/joueur/" + j.getUtilisateur().getId(),
+                    EvenementJeuDTO.of(EvenementJeuDTO.Type.ENCHERE, etat)
+            );
+        }
+
+        return partie;
+    }
+
+    @org.springframework.transaction.annotation.Transactional
+    public void supprimerPartie(Long partieId, Long utilisateurId) {
+        Partie partie = partieRepository.findById(partieId)
+                .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
+
+        if (!"OUVERTE".equals(partie.getStatut())) {
+            throw new BusinessException("Seules les parties ouvertes peuvent être supprimées.");
+        }
+
+        // Vérifier que l'utilisateur est bien dans la partie (ou créateur = premier joueur)
+        List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
+        boolean estDansLaPartie = joueurs.stream()
+                .anyMatch(j -> j.getUtilisateur().getId().equals(utilisateurId));
+        if (!estDansLaPartie && !joueurs.isEmpty()) {
+            throw new BusinessException("Vous n'êtes pas dans cette partie.");
+        }
+
+        // Vider les mains des joueurs (table de jointure joueur_carte) puis supprimer les joueurs
+        for (Joueur j : joueurs) {
+            j.getCartesEnMain().clear();
+            joueurRepository.save(j);
+        }
+        joueurRepository.deleteAll(joueurs);
+        joueurRepository.flush();
+
+        partieRepository.delete(partie);
     }
 
     public List<Joueur> getJoueurs(Long partieId) {
-        // Vérifier que la partie existe
         if (!partieRepository.existsById(partieId)) {
             throw new ResourceNotFoundException("Partie #" + partieId + " introuvable.");
         }

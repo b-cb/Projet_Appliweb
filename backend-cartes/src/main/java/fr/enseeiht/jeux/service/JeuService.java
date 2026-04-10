@@ -5,8 +5,12 @@ import fr.enseeiht.jeux.exception.BusinessException;
 import fr.enseeiht.jeux.exception.ResourceNotFoundException;
 import fr.enseeiht.jeux.modele.*;
 import fr.enseeiht.jeux.repository.*;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -49,17 +53,38 @@ public class JeuService {
     private final UtilisateurRepository utilisateurRepository;
     private final EnchereRepository enchereRepository;
     private final PliRepository pliRepository;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final BotService botService;
 
     public JeuService(PartieRepository partieRepository,
                       JoueurRepository joueurRepository,
                       UtilisateurRepository utilisateurRepository,
                       EnchereRepository enchereRepository,
-                      PliRepository pliRepository) {
+                      PliRepository pliRepository,
+                      SimpMessagingTemplate messagingTemplate,
+                      @Lazy BotService botService) {
         this.partieRepository = partieRepository;
         this.joueurRepository = joueurRepository;
         this.utilisateurRepository = utilisateurRepository;
         this.enchereRepository = enchereRepository;
         this.pliRepository = pliRepository;
+        this.messagingTemplate = messagingTemplate;
+        this.botService = botService;
+    }
+
+    /**
+     * Pousse l'état courant du jeu à tous les joueurs de la partie via WebSocket.
+     * On envoie un EvenementJeuDTO avec l'état vu par chaque joueur (sa propre main).
+     */
+    private void pushEtatATous(Long partieId, List<Joueur> joueurs, EvenementJeuDTO.Type type) {
+        for (Joueur j : joueurs) {
+            EtatJeuDTO etat = getEtatJeu(partieId, j.getUtilisateur().getId());
+            // Topic personnel par joueur pour que chacun reçoive uniquement sa propre main
+            messagingTemplate.convertAndSend(
+                    "/topic/partie/" + partieId + "/joueur/" + j.getUtilisateur().getId(),
+                    EvenementJeuDTO.of(type, etat)
+            );
+        }
     }
 
     // =========================================================
@@ -128,6 +153,33 @@ public class JeuService {
             dto.setPliCourant(pliCourant);
         } else {
             dto.setPliCourant(new ArrayList<>());
+        }
+
+        // Dernier pli terminé (pli précédent)
+        if (partie.getNumPliCourant() > 1 || "TERMINEE".equals(partie.getStatut())) {
+            int numDernier = "TERMINEE".equals(partie.getStatut())
+                    ? partie.getNumPliCourant() : partie.getNumPliCourant() - 1;
+            Optional<Pli> dernierOpt = pliRepository.findByPartie_IdAndNumTour(partieId, numDernier);
+            if (dernierOpt.isPresent()) {
+                Pli dp = dernierOpt.get();
+                List<Carte> dpCartes = dp.getCartesJouees();
+                int dpOuvreur = dp.getJoueurOuvreurIndex();
+                List<EtatJeuDTO.CartePliDTO> dernierPliList = new ArrayList<>();
+                for (int i = 0; i < dpCartes.size(); i++) {
+                    int idx = (dpOuvreur + i) % 4;
+                    final int idxFinal = idx;
+                    Joueur j = joueurs.stream().filter(jj -> jj.getPosition() == idxFinal).findFirst().orElse(null);
+                    if (j != null) {
+                        dernierPliList.add(new EtatJeuDTO.CartePliDTO(
+                                CarteDTO.fromEntity(dpCartes.get(i)),
+                                j.getUtilisateur().getPseudo(),
+                                j.getEquipe()
+                        ));
+                    }
+                }
+                dto.setDernierPli(dernierPliList);
+                dto.setDernierPliGagnantEquipe(dp.getGagnantEquipe());
+            }
         }
 
         // Historique des enchères
@@ -231,6 +283,19 @@ public class JeuService {
         }
 
         partieRepository.save(partie);
+
+        // Push WebSocket : notifier tous les joueurs du nouvel état
+        EvenementJeuDTO.Type typeEvt = "EN_JEU".equals(partie.getStatut())
+                ? EvenementJeuDTO.Type.CARTE_JOUEE
+                : EvenementJeuDTO.Type.ENCHERE;
+        pushEtatATous(partieId, joueurs, typeEvt);
+
+        // Déclencher le bot après le commit (évite la lecture de données pas encore commitées)
+        final Long partieIdFinal = partieId;
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override public void afterCommit() { botService.jouerSiTourDuBot(partieIdFinal); }
+        });
+
         return getEtatJeu(partieId, utilisateurId);
     }
 
@@ -302,11 +367,36 @@ public class JeuService {
         partie.setTourJoueurIndex((partie.getTourJoueurIndex() + 1) % 4);
 
         // Si le pli est complet (4 cartes)
-        if (pli.getCartesJouees().size() == 4) {
+        boolean pliComplet = pli.getCartesJouees().size() == 4;
+
+        if (pliComplet) {
+            // Push intermédiaire AVANT de terminer le pli : les 4 cartes sont visibles
+            partieRepository.save(partie);
+            pushEtatATous(partieId, joueurs, EvenementJeuDTO.Type.CARTE_JOUEE);
+
             terminerPli(partie, pli, joueurs);
         }
 
         partieRepository.save(partie);
+
+        // Push final (nouveau pli ou fin de partie)
+        if (pliComplet) {
+            EvenementJeuDTO.Type typeEvt = "TERMINEE".equals(partie.getStatut())
+                    ? EvenementJeuDTO.Type.PARTIE_TERMINEE
+                    : EvenementJeuDTO.Type.PLI_TERMINE;
+            pushEtatATous(partieId, joueurs, typeEvt);
+        } else {
+            pushEtatATous(partieId, joueurs, EvenementJeuDTO.Type.CARTE_JOUEE);
+        }
+
+        // Déclencher le bot après le commit (évite la lecture de données pas encore commitées)
+        if (!"TERMINEE".equals(partie.getStatut())) {
+            final Long partieIdFinal = partieId;
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { botService.jouerSiTourDuBot(partieIdFinal); }
+            });
+        }
+
         return getEtatJeu(partieId, utilisateurId);
     }
 

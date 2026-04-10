@@ -24,7 +24,7 @@ public class Joueur {
     @JoinColumn(name = "partie_id")
     private Partie partie;
 
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(name = "joueur_carte", joinColumns = @JoinColumn(name = "joueur_id"), inverseJoinColumns = @JoinColumn(name = "carte_id"))
     private List<Carte> cartesEnMain = new ArrayList<>();
 

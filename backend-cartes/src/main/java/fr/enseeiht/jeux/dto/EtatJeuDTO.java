@@ -29,6 +29,10 @@ public class EtatJeuDTO {
     // Pli en cours (cartes déjà jouées dans le pli courant)
     private List<CartePliDTO> pliCourant;
 
+    // Dernier pli terminé (pour affichage)
+    private List<CartePliDTO> dernierPli;
+    private int dernierPliGagnantEquipe;
+
     // Historique des enchères
     private List<EnchereDTO> encheres;
 
@@ -80,6 +84,12 @@ public class EtatJeuDTO {
 
     public List<CartePliDTO> getPliCourant() { return pliCourant; }
     public void setPliCourant(List<CartePliDTO> pliCourant) { this.pliCourant = pliCourant; }
+
+    public List<CartePliDTO> getDernierPli() { return dernierPli; }
+    public void setDernierPli(List<CartePliDTO> dernierPli) { this.dernierPli = dernierPli; }
+
+    public int getDernierPliGagnantEquipe() { return dernierPliGagnantEquipe; }
+    public void setDernierPliGagnantEquipe(int dernierPliGagnantEquipe) { this.dernierPliGagnantEquipe = dernierPliGagnantEquipe; }
 
     public List<EnchereDTO> getEncheres() { return encheres; }
     public void setEncheres(List<EnchereDTO> encheres) { this.encheres = encheres; }

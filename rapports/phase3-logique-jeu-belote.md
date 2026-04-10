@@ -266,3 +266,320 @@ Si le preneur ne fait pas son contrat : son équipe marque 0, les défenseurs ma
 
 ### Suppression de la BDD au changement de schéma
 Avec `ddl-auto=update`, Hibernate ne peut pas ajouter des colonnes `NOT NULL` sur une table avec des lignes existantes. La BDD H2 (`data/cartesdb.mv.db`) a été supprimée avant le démarrage pour forcer la recréation du schéma propre.
+
+
+
+## Commande Bash de Test complète
+
+```
+cat << 'SCRIPT' > /tmp/test_phase3.sh
+#!/bin/bash
+set -e
+
+BASE="http://localhost:8080/api"
+PASS=0
+FAIL=0
+
+check() {
+  local num="$1" desc="$2" expected="$3" actual="$4"
+  if echo "$actual" | grep -q "$expected"; then
+    echo "PASS T${num}: ${desc}"
+    PASS=$((PASS+1))
+  else
+    echo "FAIL T${num}: ${desc}"
+    echo "      Attendu : $expected"
+    echo "      Recu    : $actual"
+    FAIL=$((FAIL+1))
+  fi
+}
+
+json_field() {
+  # json_field <json> <key> — extrait la valeur d'un champ JSON simple
+  echo "$1" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('$2','ABSENT'))" 2>/dev/null
+}
+
+# ===== SETUP : créer 4 comptes =====
+echo "--- Setup : inscription des 4 joueurs ---"
+R=$(curl -s -X POST $BASE/auth/inscrire -H "Content-Type: application/json" -d '{"pseudo":"alice","motDePasse":"secret123"}')
+TOKEN_ALICE=$(echo $R | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])" 2>/dev/null)
+ID_ALICE=$(echo $R | python3 -c "import sys,json; print(json.load(sys.stdin)['utilisateur']['id'])" 2>/dev/null)
+
+R=$(curl -s -X POST $BASE/auth/inscrire -H "Content-Type: application/json" -d '{"pseudo":"bob","motDePasse":"pass456"}')
+TOKEN_BOB=$(echo $R | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])" 2>/dev/null)
+ID_BOB=$(echo $R | python3 -c "import sys,json; print(json.load(sys.stdin)['utilisateur']['id'])" 2>/dev/null)
+
+R=$(curl -s -X POST $BASE/auth/inscrire -H "Content-Type: application/json" -d '{"pseudo":"charlie","motDePasse":"pass789"}')
+TOKEN_CHARLIE=$(echo $R | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])" 2>/dev/null)
+ID_CHARLIE=$(echo $R | python3 -c "import sys,json; print(json.load(sys.stdin)['utilisateur']['id'])" 2>/dev/null)
+
+R=$(curl -s -X POST $BASE/auth/inscrire -H "Content-Type: application/json" -d '{"pseudo":"dave","motDePasse":"pass000"}')
+TOKEN_DAVE=$(echo $R | python3 -c "import sys,json; print(json.load(sys.stdin)['token'])" 2>/dev/null)
+ID_DAVE=$(echo $R | python3 -c "import sys,json; print(json.load(sys.stdin)['utilisateur']['id'])" 2>/dev/null)
+
+echo "alice=$ID_ALICE bob=$ID_BOB charlie=$ID_CHARLIE dave=$ID_DAVE"
+echo ""
+
+# ===== TESTS AUTH (pré-requis) =====
+echo "--- Auth ---"
+R=$(curl -s -X POST $BASE/auth/connexion -H "Content-Type: application/json" -d '{"pseudo":"alice","motDePasse":"secret123"}')
+check 1 "Connexion alice" '"token"' "$R"
+
+R=$(curl -s -X POST $BASE/auth/connexion -H "Content-Type: application/json" -d '{"pseudo":"alice","motDePasse":"faux"}')
+check 2 "Connexion mauvais mdp → erreur" '"erreur"' "$R"
+
+R=$(curl -s $BASE/parties -H "Authorization: Bearer INVALID")
+check 3 "GET /parties sans token valide → 401" '"erreur"' "$R"
+
+# ===== LOBBY =====
+echo ""
+echo "--- Lobby ---"
+R=$(curl -s -X POST $BASE/partie/creer -H "Authorization: Bearer $TOKEN_ALICE")
+check 4 "Créer une partie" '"statut":"OUVERTE"' "$R"
+PID=$(echo $R | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+
+R=$(curl -s -X POST "$BASE/partie/$PID/rejoindre?utilisateurId=$ID_ALICE" -H "Authorization: Bearer $TOKEN_ALICE")
+check 5 "Alice rejoint" '"equipe":1' "$R"
+
+R=$(curl -s -X POST "$BASE/partie/$PID/rejoindre?utilisateurId=$ID_ALICE" -H "Authorization: Bearer $TOKEN_ALICE")
+check 6 "Alice rejoint 2 fois → erreur" '"erreur"' "$R"
+
+R=$(curl -s -X POST "$BASE/partie/$PID/rejoindre?utilisateurId=$ID_BOB" -H "Authorization: Bearer $TOKEN_BOB")
+check 7 "Bob rejoint" '"equipe":2' "$R"
+
+R=$(curl -s -X POST "$BASE/partie/$PID/rejoindre?utilisateurId=$ID_CHARLIE" -H "Authorization: Bearer $TOKEN_CHARLIE")
+check 8 "Charlie rejoint" '"equipe":1' "$R"
+
+R=$(curl -s -X POST "$BASE/partie/$PID/rejoindre?utilisateurId=$ID_DAVE" -H "Authorization: Bearer $TOKEN_DAVE")
+check 9 "Dave rejoint" '"equipe":2' "$R"
+
+# Démarrer avec 3 joueurs seulement → erreur (autre partie)
+R2=$(curl -s -X POST $BASE/partie/creer -H "Authorization: Bearer $TOKEN_ALICE")
+PID2=$(echo $R2 | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+curl -s -X POST "$BASE/partie/$PID2/rejoindre?utilisateurId=$ID_ALICE" -H "Authorization: Bearer $TOKEN_ALICE" > /dev/null
+R=$(curl -s -X POST "$BASE/partie/$PID2/demarrer" -H "Authorization: Bearer $TOKEN_ALICE")
+check 10 "Démarrer avec <4 joueurs → erreur" '"erreur"' "$R"
+
+R=$(curl -s -X POST "$BASE/partie/$PID/demarrer" -H "Authorization: Bearer $TOKEN_ALICE")
+check 11 "Démarrer avec 4 joueurs → EN_ENCHERE" '"statut":"EN_ENCHERE"' "$R"
+
+# ===== ÉTAT DU JEU =====
+echo ""
+echo "--- État du jeu ---"
+R=$(curl -s "$BASE/partie/$PID/etat?utilisateurId=$ID_ALICE" -H "Authorization: Bearer $TOKEN_ALICE")
+check 12 "GET /etat retourne statut EN_ENCHERE" '"statut":"EN_ENCHERE"' "$R"
+check 13 "GET /etat retourne 8 cartes en main" '"maMain"' "$R"
+NB_CARTES=$(echo $R | python3 -c "import sys,json; print(len(json.load(sys.stdin)['maMain']))")
+check 14 "maMain contient exactement 8 cartes (got $NB_CARTES)" '8' "$NB_CARTES"
+
+# Récupérer les mains pour la suite
+MAIN_ALICE=$(curl -s "$BASE/partie/$PID/etat?utilisateurId=$ID_ALICE" -H "Authorization: Bearer $TOKEN_ALICE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join([str(c['id'])+':'+c['valeur']+'/'+c['couleur'] for c in d['maMain']]))")
+MAIN_BOB=$(curl -s "$BASE/partie/$PID/etat?utilisateurId=$ID_BOB" -H "Authorization: Bearer $TOKEN_BOB" | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join([str(c['id'])+':'+c['valeur']+'/'+c['couleur'] for c in d['maMain']]))")
+MAIN_CHARLIE=$(curl -s "$BASE/partie/$PID/etat?utilisateurId=$ID_CHARLIE" -H "Authorization: Bearer $TOKEN_CHARLIE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join([str(c['id'])+':'+c['valeur']+'/'+c['couleur'] for c in d['maMain']]))")
+MAIN_DAVE=$(curl -s "$BASE/partie/$PID/etat?utilisateurId=$ID_DAVE" -H "Authorization: Bearer $TOKEN_DAVE" | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join([str(c['id'])+':'+c['valeur']+'/'+c['couleur'] for c in d['maMain']]))")
+
+echo "  Mains:"
+echo "  Alice:   $MAIN_ALICE"
+echo "  Bob:     $MAIN_BOB"
+echo "  Charlie: $MAIN_CHARLIE"
+echo "  Dave:    $MAIN_DAVE"
+
+# Identifier quelques cartes utiles pour les tests
+C1_ALICE=$(echo $MAIN_ALICE | awk '{print $1}' | cut -d: -f1)
+C1_BOB=$(echo $MAIN_BOB | awk '{print $1}' | cut -d: -f1)
+C1_CHARLIE=$(echo $MAIN_CHARLIE | awk '{print $1}' | cut -d: -f1)
+C1_DAVE=$(echo $MAIN_DAVE | awk '{print $1}' | cut -d: -f1)
+
+# ===== ENCHÈRES =====
+echo ""
+echo "--- Enchères ---"
+
+R=$(curl -s -X POST "$BASE/partie/$PID/encherir?utilisateurId=$ID_BOB" \
+  -H "Authorization: Bearer $TOKEN_BOB" -H "Content-Type: application/json" \
+  -d '{"passe":false,"contrat":80,"couleur":"Coeur"}')
+check 15 "Bob enchérit hors tour → erreur" '"erreur"' "$R"
+
+R=$(curl -s -X POST "$BASE/partie/$PID/encherir?utilisateurId=$ID_ALICE" \
+  -H "Authorization: Bearer $TOKEN_ALICE" -H "Content-Type: application/json" \
+  -d '{"passe":false,"contrat":70,"couleur":"Coeur"}')
+check 16 "Contrat invalide (70) → erreur" '"erreur"' "$R"
+
+R=$(curl -s -X POST "$BASE/partie/$PID/encherir?utilisateurId=$ID_ALICE" \
+  -H "Authorization: Bearer $TOKEN_ALICE" -H "Content-Type: application/json" \
+  -d '{"passe":false,"contrat":80,"couleur":"Coeur"}')
+check 17 "Alice enchérit 80 Coeur → ok" '"contratValeur":80' "$R"
+
+R=$(curl -s -X POST "$BASE/partie/$PID/encherir?utilisateurId=$ID_BOB" \
+  -H "Authorization: Bearer $TOKEN_BOB" -H "Content-Type: application/json" \
+  -d '{"passe":false,"contrat":80,"couleur":"Pique"}')
+check 18 "Bob surenchère 80 (pas supérieur) → erreur" '"erreur"' "$R"
+
+# Bob, Charlie, Dave passent → 3 passes → EN_JEU
+R=$(curl -s -X POST "$BASE/partie/$PID/encherir?utilisateurId=$ID_BOB" \
+  -H "Authorization: Bearer $TOKEN_BOB" -H "Content-Type: application/json" -d '{"passe":true}')
+check 19 "Bob passe → tour suivant" '"statut":"EN_ENCHERE"' "$R"
+
+R=$(curl -s -X POST "$BASE/partie/$PID/encherir?utilisateurId=$ID_CHARLIE" \
+  -H "Authorization: Bearer $TOKEN_CHARLIE" -H "Content-Type: application/json" -d '{"passe":true}')
+check 20 "Charlie passe" '"statut":"EN_ENCHERE"' "$R"
+
+R=$(curl -s -X POST "$BASE/partie/$PID/encherir?utilisateurId=$ID_DAVE" \
+  -H "Authorization: Bearer $TOKEN_DAVE" -H "Content-Type: application/json" -d '{"passe":true}')
+check 21 "Dave passe → 3 passes → EN_JEU" '"statut":"EN_JEU"' "$R"
+check 22 "Atout fixé à Coeur" '"atout":"Coeur"' "$R"
+
+# Vérifier que le preneur (alice) ouvre le jeu
+TOUR=$(echo $R | python3 -c "import sys,json; print(json.load(sys.stdin)['tourPseudo'])")
+check 23 "Le preneur (alice) ouvre le jeu (got $TOUR)" 'alice' "$TOUR"
+
+# ===== JEU — VALIDATIONS =====
+echo ""
+echo "--- Jeu : validations ---"
+
+R=$(curl -s -X POST "$BASE/partie/$PID/jouer?utilisateurId=$ID_BOB" \
+  -H "Authorization: Bearer $TOKEN_BOB" -H "Content-Type: application/json" \
+  -d "{\"carteId\":$C1_BOB}")
+check 24 "Jouer hors tour → erreur" '"erreur"' "$R"
+
+R=$(curl -s -X POST "$BASE/partie/$PID/jouer?utilisateurId=$ID_ALICE" \
+  -H "Authorization: Bearer $TOKEN_ALICE" -H "Content-Type: application/json" \
+  -d '{"carteId":99999}')
+check 25 "Jouer carte inexistante → erreur" '"erreur"' "$R"
+
+# ===== JEU — 8 PLIS COMPLETS =====
+echo ""
+echo "--- Jeu : 8 plis complets ---"
+
+# Fonction pour jouer une carte et retourner la réponse
+jouer() {
+  local uid=$1 tok=$2 cid=$3
+  curl -s -X POST "$BASE/partie/$PID/jouer?utilisateurId=$uid" \
+    -H "Authorization: Bearer $tok" -H "Content-Type: application/json" \
+    -d "{\"carteId\":$cid}"
+}
+
+# Fonction pour trouver la première carte jouable selon la couleur demandée
+# Retourne l'id de la première carte de la main
+premiere_carte() {
+  echo "$1" | awk '{print $1}' | cut -d: -f1
+}
+
+# Stratégie : jouer toutes les cartes dans l'ordre, en respectant les règles.
+# On joue carte par carte en vérifiant si chaque réponse contient une erreur.
+# Si erreur, on essaie la suivante.
+
+jouer_valide() {
+  local uid=$1 tok=$2 main=$3
+  for entry in $main; do
+    cid=$(echo $entry | cut -d: -f1)
+    R=$(jouer $uid $tok $cid)
+    if ! echo "$R" | grep -q '"erreur"'; then
+      echo "$R"
+      return 0
+    fi
+  done
+  echo '{"erreur":"aucune carte jouable"}'
+}
+
+# Récupérer l'état courant pour savoir à qui c'est le tour
+get_tour() {
+  curl -s "$BASE/partie/$PID/etat?utilisateurId=$ID_ALICE" \
+    -H "Authorization: Bearer $TOKEN_ALICE" | \
+    python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('tourPseudo','?'),d.get('monJoueurId','?'),d.get('statut','?'),d.get('numPliCourant',0))"
+}
+
+# Jouer les 8 plis : chaque joueur joue sa première carte valide
+STATUT="EN_JEU"
+PLI_PRECEDENT=0
+NB_ERREURS_JEU=0
+
+for round in $(seq 1 32); do
+  # Récupérer l'état
+  ETAT_ALICE=$(curl -s "$BASE/partie/$PID/etat?utilisateurId=$ID_ALICE" -H "Authorization: Bearer $TOKEN_ALICE")
+  ETAT_BOB=$(curl -s "$BASE/partie/$PID/etat?utilisateurId=$ID_BOB" -H "Authorization: Bearer $TOKEN_BOB")
+  ETAT_CHARLIE=$(curl -s "$BASE/partie/$PID/etat?utilisateurId=$ID_CHARLIE" -H "Authorization: Bearer $TOKEN_CHARLIE")
+  ETAT_DAVE=$(curl -s "$BASE/partie/$PID/etat?utilisateurId=$ID_DAVE" -H "Authorization: Bearer $TOKEN_DAVE")
+
+  STATUT=$(echo $ETAT_ALICE | python3 -c "import sys,json; print(json.load(sys.stdin)['statut'])")
+  if [ "$STATUT" = "TERMINEE" ]; then break; fi
+
+  TOUR_PSEUDO=$(echo $ETAT_ALICE | python3 -c "import sys,json; print(json.load(sys.stdin).get('tourPseudo','?'))")
+  NUM_PLI=$(echo $ETAT_ALICE | python3 -c "import sys,json; print(json.load(sys.stdin).get('numPliCourant',0))")
+
+  case $TOUR_PSEUDO in
+    alice)
+      MAIN=$(echo $ETAT_ALICE | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join([str(c['id'])+':'+c['valeur']+'/'+c['couleur'] for c in d['maMain']]))")
+      R=$(jouer_valide $ID_ALICE $TOKEN_ALICE "$MAIN")
+      ;;
+    bob)
+      MAIN=$(echo $ETAT_BOB | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join([str(c['id'])+':'+c['valeur']+'/'+c['couleur'] for c in d['maMain']]))")
+      R=$(jouer_valide $ID_BOB $TOKEN_BOB "$MAIN")
+      ;;
+    charlie)
+      MAIN=$(echo $ETAT_CHARLIE | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join([str(c['id'])+':'+c['valeur']+'/'+c['couleur'] for c in d['maMain']]))")
+      R=$(jouer_valide $ID_CHARLIE $TOKEN_CHARLIE "$MAIN")
+      ;;
+    dave)
+      MAIN=$(echo $ETAT_DAVE | python3 -c "import sys,json; d=json.load(sys.stdin); print(' '.join([str(c['id'])+':'+c['valeur']+'/'+c['couleur'] for c in d['maMain']]))")
+      R=$(jouer_valide $ID_DAVE $TOKEN_DAVE "$MAIN")
+      ;;
+    *)
+      echo "Tour inconnu: $TOUR_PSEUDO"
+      break
+      ;;
+  esac
+
+  if echo "$R" | grep -q '"erreur"'; then
+    echo "  ERREUR carte round $round ($TOUR_PSEUDO): $(echo $R | python3 -c 'import sys,json; print(json.load(sys.stdin)["erreur"])')"
+    NB_ERREURS_JEU=$((NB_ERREURS_JEU+1))
+    break
+  fi
+
+  NEW_STATUT=$(echo $R | python3 -c "import sys,json; print(json.load(sys.stdin)['statut'])")
+  NEW_PLI=$(echo $R | python3 -c "import sys,json; print(json.load(sys.stdin).get('numPliCourant',0))")
+  if [ "$NEW_PLI" != "$PLI_PRECEDENT" ]; then
+    SA=$(echo $R | python3 -c "import sys,json; print(json.load(sys.stdin)['scoreA'])")
+    SB=$(echo $R | python3 -c "import sys,json; print(json.load(sys.stdin)['scoreB'])")
+    echo "  Pli $PLI_PRECEDENT terminé → sA=$SA sB=$SB (new pli=$NEW_PLI)"
+    PLI_PRECEDENT=$NEW_PLI
+  fi
+  if [ "$NEW_STATUT" = "TERMINEE" ]; then break; fi
+done
+
+check 26 "Aucune erreur inattendue en cours de partie" '0' "$NB_ERREURS_JEU"
+
+# Vérifier l'état final
+ETAT_FINAL=$(curl -s "$BASE/partie/$PID/etat?utilisateurId=$ID_ALICE" -H "Authorization: Bearer $TOKEN_ALICE")
+STATUT_FINAL=$(echo $ETAT_FINAL | python3 -c "import sys,json; print(json.load(sys.stdin)['statut'])")
+check 27 "Partie terminée après 8 plis" 'TERMINEE' "$STATUT_FINAL"
+
+SA=$(echo $ETAT_FINAL | python3 -c "import sys,json; print(json.load(sys.stdin)['scoreA'])")
+SB=$(echo $ETAT_FINAL | python3 -c "import sys,json; print(json.load(sys.stdin)['scoreB'])")
+TOTAL=$((SA + SB))
+check 28 "Total des points = 162 (152 cartes + 10 dernier pli), got $TOTAL" '162' "$TOTAL"
+
+RESULTAT=$(echo $ETAT_FINAL | python3 -c "import sys,json; d=json.load(sys.stdin); print('ok' if d.get('resultat') else 'absent')")
+check 29 "Champ resultat présent dans état final" 'ok' "$RESULTAT"
+
+CONTRAT_REMPLI=$(echo $ETAT_FINAL | python3 -c "import sys,json; r=json.load(sys.stdin).get('resultat',{}); print(r.get('contratRempli','?'))")
+GAGNANT=$(echo $ETAT_FINAL | python3 -c "import sys,json; r=json.load(sys.stdin).get('resultat',{}); print(r.get('gagnantEquipe','?'))")
+PRENEUR=$(echo $ETAT_FINAL | python3 -c "import sys,json; r=json.load(sys.stdin).get('resultat',{}); print(r.get('pseudoPreneur','?'))")
+echo "  Résultat : contratRempli=$CONTRAT_REMPLI gagnantEquipe=$GAGNANT preneur=$PRENEUR"
+check 30 "Champ contratRempli présent" 'True\|False' "$CONTRAT_REMPLI"
+
+# ScoreGlobal des gagnants
+SCORES=$(curl -s "$BASE/utilisateurs" -H "Authorization: Bearer $TOKEN_ALICE" | \
+  python3 -c "import sys,json; users=json.load(sys.stdin); print(' '.join([u['pseudo']+':'+str(u['scoreGlobal']) for u in users]))")
+check 31 "scoreGlobal mis à jour après partie" 'alice\|bob\|charlie\|dave' "$SCORES"
+echo "  Scores globaux : $SCORES"
+
+# ===== RÉCAPITULATIF =====
+echo ""
+echo "=============================="
+echo "  TOTAL : $((PASS+FAIL)) tests"
+echo "  PASS  : $PASS"
+echo "  FAIL  : $FAIL"
+echo "=============================="
+SCRIPT
+chmod +x /tmp/test_phase3.sh
+bash /tmp/test_phase3.sh
+```

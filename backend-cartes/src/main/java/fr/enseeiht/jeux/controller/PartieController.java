@@ -19,7 +19,13 @@ public class PartieController {
     }
 
     @PostMapping("/partie/creer")
-    public ResponseEntity<PartieDTO> creerPartie() {
+    public ResponseEntity<PartieDTO> creerPartie(
+            @RequestParam(defaultValue = "false") boolean avecBots,
+            @RequestParam(required = false) Long utilisateurId) {
+        if (avecBots && utilisateurId != null) {
+            return ResponseEntity.ok(PartieDTO.fromEntity(
+                    partieService.creerEtDemarrerAvecBots(utilisateurId)));
+        }
         return ResponseEntity.ok(PartieDTO.fromEntity(partieService.creerPartie()));
     }
 
@@ -46,6 +52,14 @@ public class PartieController {
     @PostMapping("/partie/{partieId}/demarrer")
     public ResponseEntity<PartieDTO> demarrerPartie(@PathVariable Long partieId) {
         return ResponseEntity.ok(PartieDTO.fromEntity(partieService.demarrerPartie(partieId)));
+    }
+
+    @DeleteMapping("/partie/{partieId}")
+    public ResponseEntity<Void> supprimerPartie(
+            @PathVariable Long partieId,
+            @RequestParam Long utilisateurId) {
+        partieService.supprimerPartie(partieId, utilisateurId);
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/partie/{partieId}/joueurs")

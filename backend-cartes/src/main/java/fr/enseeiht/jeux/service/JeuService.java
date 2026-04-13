@@ -19,10 +19,14 @@ import java.util.stream.Collectors;
 @Transactional
 public class JeuService {
 
-    // Valeurs des cartes à l'atout (Belote coinchée)
+    // Valeurs des cartes à l'atout (Belote coinchée normale)
     private static final Map<String, Integer> POINTS_ATOUT = new LinkedHashMap<>();
-    // Valeurs des cartes hors atout
+    // Valeurs des cartes hors atout (Belote coinchée normale)
     private static final Map<String, Integer> POINTS_NORMAL = new LinkedHashMap<>();
+    // Valeurs en mode Sans-atout (As=19, total = 4×38 + 10 dernier pli = 162)
+    private static final Map<String, Integer> POINTS_SANS_ATOUT = new LinkedHashMap<>();
+    // Valeurs en mode Tout-atout (total = 4×38 + 10 dernier pli = 162)
+    private static final Map<String, Integer> POINTS_TOUT_ATOUT = new LinkedHashMap<>();
     // Ordre des cartes à l'atout (force croissante)
     private static final List<String> ORDRE_ATOUT = List.of("7", "8", "Dame", "Roi", "10", "As", "9", "Valet");
     // Ordre des cartes hors atout (force croissante)
@@ -46,6 +50,27 @@ public class JeuService {
         POINTS_NORMAL.put("9", 0);
         POINTS_NORMAL.put("8", 0);
         POINTS_NORMAL.put("7", 0);
+
+        // En Sans-atout l'As vaut 19 (total possible = 4×38 + 10 dernier pli = 162)
+        POINTS_SANS_ATOUT.put("As", 19);
+        POINTS_SANS_ATOUT.put("10", 10);
+        POINTS_SANS_ATOUT.put("Roi", 4);
+        POINTS_SANS_ATOUT.put("Dame", 3);
+        POINTS_SANS_ATOUT.put("Valet", 2);
+        POINTS_SANS_ATOUT.put("9", 0);
+        POINTS_SANS_ATOUT.put("8", 0);
+        POINTS_SANS_ATOUT.put("7", 0);
+
+        // En Tout-atout échelle réduite (total possible = 4×38 + 10 dernier pli = 162)
+        // Valet=14, 9=9, As=6, 10=5, Roi=3, Dame=1, 8=0, 7=0
+        POINTS_TOUT_ATOUT.put("Valet", 14);
+        POINTS_TOUT_ATOUT.put("9", 9);
+        POINTS_TOUT_ATOUT.put("As", 6);
+        POINTS_TOUT_ATOUT.put("10", 5);
+        POINTS_TOUT_ATOUT.put("Roi", 3);
+        POINTS_TOUT_ATOUT.put("Dame", 1);
+        POINTS_TOUT_ATOUT.put("8", 0);
+        POINTS_TOUT_ATOUT.put("7", 0);
     }
 
     private final PartieRepository partieRepository;
@@ -240,9 +265,9 @@ public class JeuService {
             if (couleur == null || couleur.isBlank()) {
                 throw new BusinessException("La couleur de l'atout est obligatoire.");
             }
-            String[] couleursValides = {"Coeur", "Carreau", "Trefle", "Pique"};
+            String[] couleursValides = {"Coeur", "Carreau", "Trefle", "Pique", "Sans-atout", "Tout-atout"};
             if (Arrays.stream(couleursValides).noneMatch(c -> c.equalsIgnoreCase(couleur))) {
-                throw new BusinessException("Couleur invalide. Valeurs acceptées : Coeur, Carreau, Trefle, Pique.");
+                throw new BusinessException("Couleur invalide. Valeurs acceptées : Coeur, Carreau, Trefle, Pique, Sans-atout, Tout-atout.");
             }
 
             // Vérifier que le contrat surenchérit sur le précédent
@@ -402,6 +427,7 @@ public class JeuService {
 
     /**
      * Vérifie les règles de suivi (couleur demandée, obligation de couper, de monter).
+     * Gère les trois modes : coinche normale, Sans-atout, Tout-atout.
      */
     private void verifierReglesCouleur(Joueur joueur, Carte carteJouee, Pli pli, String atout) {
         if (pli.getCartesJouees().isEmpty()) return; // premier à jouer dans ce pli, tout est permis
@@ -409,8 +435,40 @@ public class JeuService {
         Carte premiereCarteJouee = pli.getCartesJouees().get(0);
         String couleurDemandee = premiereCarteJouee.getCouleur();
         List<Carte> main = joueur.getCartesEnMain();
-
         boolean possedeColoreDemandee = main.stream().anyMatch(c -> c.getCouleur().equals(couleurDemandee));
+
+        // --- Mode Sans-atout : uniquement l'obligation de suivre la couleur ---
+        if ("Sans-atout".equals(atout)) {
+            if (!carteJouee.getCouleur().equals(couleurDemandee) && possedeColoreDemandee) {
+                throw new BusinessException("Vous devez suivre la couleur demandée (" + couleurDemandee + ").");
+            }
+            return; // pas d'atout → pas de coupe ni de montée inter-couleurs
+        }
+
+        // --- Mode Tout-atout : chaque couleur est son propre atout ---
+        if ("Tout-atout".equals(atout)) {
+            if (!carteJouee.getCouleur().equals(couleurDemandee)) {
+                if (possedeColoreDemandee) {
+                    throw new BusinessException("Vous devez suivre la couleur demandée (" + couleurDemandee + ").");
+                }
+                return; // n'a pas la couleur → peut défausser librement
+            }
+            // Joue la couleur demandée → obligation de monter (ORDRE_ATOUT pour toutes les couleurs)
+            Optional<Carte> plusFort = pli.getCartesJouees().stream()
+                    .filter(c -> c.getCouleur().equals(couleurDemandee))
+                    .max(Comparator.comparingInt(c -> ORDRE_ATOUT.indexOf(c.getValeur())));
+            if (plusFort.isPresent()) {
+                boolean peutMonter = main.stream()
+                        .filter(c -> c.getCouleur().equals(couleurDemandee))
+                        .anyMatch(c -> ORDRE_ATOUT.indexOf(c.getValeur()) > ORDRE_ATOUT.indexOf(plusFort.get().getValeur()));
+                if (peutMonter && ORDRE_ATOUT.indexOf(carteJouee.getValeur()) <= ORDRE_ATOUT.indexOf(plusFort.get().getValeur())) {
+                    throw new BusinessException("Vous devez monter (jouer plus fort dans la couleur).");
+                }
+            }
+            return;
+        }
+
+        // --- Mode coinche normal (atout = couleur) ---
         boolean possedeAtout = main.stream().anyMatch(c -> c.getCouleur().equals(atout));
 
         if (!carteJouee.getCouleur().equals(couleurDemandee)) {
@@ -425,7 +483,6 @@ public class JeuService {
 
         // Obligation de monter à l'atout si on joue atout
         if (carteJouee.getCouleur().equals(atout) && couleurDemandee.equals(atout)) {
-            // Trouver l'atout le plus fort déjà joué dans ce pli
             Optional<Carte> plusFortAtoutJoue = pli.getCartesJouees().stream()
                     .filter(c -> c.getCouleur().equals(atout))
                     .max(Comparator.comparingInt(c -> ORDRE_ATOUT.indexOf(c.getValeur())));
@@ -449,26 +506,50 @@ public class JeuService {
         List<Carte> cartes = pli.getCartesJouees();
         int ouvreurIndex = pli.getJoueurOuvreurIndex();
 
-        // Déterminer le gagnant du pli
-        int indexGagnant = ouvreurIndex; // l'ouvreur gagne par défaut
-        Carte meilleureCarteAtout = null;
-        Carte meilleureCarteCouleurOuverte = cartes.get(0); // carte de la couleur demandée
+        // Déterminer le gagnant du pli selon le mode
         String couleurOuverte = cartes.get(0).getCouleur();
+        int indexGagnant = ouvreurIndex; // l'ouvreur gagne par défaut
+        Carte meilleureCarteCouleurOuverte = cartes.get(0);
 
-        for (int i = 0; i < 4; i++) {
-            Carte c = cartes.get(i);
-            int joueurIndex = (ouvreurIndex + i) % 4;
-
-            if (c.getCouleur().equals(atout)) {
-                if (meilleureCarteAtout == null ||
-                        ORDRE_ATOUT.indexOf(c.getValeur()) > ORDRE_ATOUT.indexOf(meilleureCarteAtout.getValeur())) {
-                    meilleureCarteAtout = c;
-                    indexGagnant = joueurIndex;
-                }
-            } else if (meilleureCarteAtout == null && c.getCouleur().equals(couleurOuverte)) {
-                if (ORDRE_NORMAL.indexOf(c.getValeur()) > ORDRE_NORMAL.indexOf(meilleureCarteCouleurOuverte.getValeur())) {
+        if ("Sans-atout".equals(atout)) {
+            // Pas d'atout : seule la couleur ouverte compte, comparée par ORDRE_NORMAL
+            for (int i = 1; i < 4; i++) {
+                Carte c = cartes.get(i);
+                int joueurIndex = (ouvreurIndex + i) % 4;
+                if (c.getCouleur().equals(couleurOuverte) &&
+                        ORDRE_NORMAL.indexOf(c.getValeur()) > ORDRE_NORMAL.indexOf(meilleureCarteCouleurOuverte.getValeur())) {
                     meilleureCarteCouleurOuverte = c;
                     indexGagnant = joueurIndex;
+                }
+            }
+        } else if ("Tout-atout".equals(atout)) {
+            // La couleur ouverte agit comme atout (ORDRE_ATOUT), pas de coupe inter-couleurs
+            for (int i = 1; i < 4; i++) {
+                Carte c = cartes.get(i);
+                int joueurIndex = (ouvreurIndex + i) % 4;
+                if (c.getCouleur().equals(couleurOuverte) &&
+                        ORDRE_ATOUT.indexOf(c.getValeur()) > ORDRE_ATOUT.indexOf(meilleureCarteCouleurOuverte.getValeur())) {
+                    meilleureCarteCouleurOuverte = c;
+                    indexGagnant = joueurIndex;
+                }
+            }
+        } else {
+            // Mode coinche normal : atout bat la couleur ouverte
+            Carte meilleureCarteAtout = null;
+            for (int i = 0; i < 4; i++) {
+                Carte c = cartes.get(i);
+                int joueurIndex = (ouvreurIndex + i) % 4;
+                if (c.getCouleur().equals(atout)) {
+                    if (meilleureCarteAtout == null ||
+                            ORDRE_ATOUT.indexOf(c.getValeur()) > ORDRE_ATOUT.indexOf(meilleureCarteAtout.getValeur())) {
+                        meilleureCarteAtout = c;
+                        indexGagnant = joueurIndex;
+                    }
+                } else if (meilleureCarteAtout == null && c.getCouleur().equals(couleurOuverte)) {
+                    if (ORDRE_NORMAL.indexOf(c.getValeur()) > ORDRE_NORMAL.indexOf(meilleureCarteCouleurOuverte.getValeur())) {
+                        meilleureCarteCouleurOuverte = c;
+                        indexGagnant = joueurIndex;
+                    }
                 }
             }
         }
@@ -481,13 +562,17 @@ public class JeuService {
                 .orElse(joueurs.get(0));
         int equipeGagnante = joueurGagnant.getEquipe();
 
-        // Calculer les points du pli
+        // Calculer les points du pli selon le mode
         int points = 0;
         for (Carte c : cartes) {
-            if (c.getCouleur().equals(atout)) {
-                points += POINTS_ATOUT.getOrDefault(c.getValeur(), 0);
+            if ("Sans-atout".equals(atout)) {
+                points += POINTS_SANS_ATOUT.getOrDefault(c.getValeur(), 0);
+            } else if ("Tout-atout".equals(atout)) {
+                points += POINTS_TOUT_ATOUT.getOrDefault(c.getValeur(), 0);
             } else {
-                points += POINTS_NORMAL.getOrDefault(c.getValeur(), 0);
+                points += c.getCouleur().equals(atout)
+                        ? POINTS_ATOUT.getOrDefault(c.getValeur(), 0)
+                        : POINTS_NORMAL.getOrDefault(c.getValeur(), 0);
             }
         }
 
@@ -568,6 +653,9 @@ public class JeuService {
 
     private String capitalise(String s) {
         if (s == null || s.isBlank()) return s;
+        // Préserver la casse des modes spéciaux
+        if (s.equalsIgnoreCase("Sans-atout")) return "Sans-atout";
+        if (s.equalsIgnoreCase("Tout-atout")) return "Tout-atout";
         return s.substring(0, 1).toUpperCase() + s.substring(1).toLowerCase();
     }
 

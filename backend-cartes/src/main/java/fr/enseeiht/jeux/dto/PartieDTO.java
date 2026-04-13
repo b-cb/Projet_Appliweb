@@ -10,17 +10,22 @@ public class PartieDTO {
     private int scoreA;
     private int scoreB;
     private int nombreJoueurs;
+    private String typeJeu;
+    private int nbJoueursRequis;
 
     public PartieDTO() {
     }
 
-    public PartieDTO(Long id, String statut, String atout, int scoreA, int scoreB, int nombreJoueurs) {
+    public PartieDTO(Long id, String statut, String atout, int scoreA, int scoreB,
+                     int nombreJoueurs, String typeJeu, int nbJoueursRequis) {
         this.id = id;
         this.statut = statut;
         this.atout = atout;
         this.scoreA = scoreA;
         this.scoreB = scoreB;
         this.nombreJoueurs = nombreJoueurs;
+        this.typeJeu = typeJeu;
+        this.nbJoueursRequis = nbJoueursRequis;
     }
 
     public static PartieDTO fromEntity(Partie p) {
@@ -30,7 +35,9 @@ public class PartieDTO {
                 p.getAtout(),
                 p.getScoreA(),
                 p.getScoreB(),
-                p.getJoueurs() != null ? p.getJoueurs().size() : 0
+                p.getJoueurs() != null ? p.getJoueurs().size() : 0,
+                p.getTypeJeu() != null ? p.getTypeJeu() : "COINCHE",
+                p.getNbJoueursRequis() > 0 ? p.getNbJoueursRequis() : 4
         );
     }
 
@@ -80,5 +87,21 @@ public class PartieDTO {
 
     public void setNombreJoueurs(int nombreJoueurs) {
         this.nombreJoueurs = nombreJoueurs;
+    }
+
+    public String getTypeJeu() {
+        return typeJeu;
+    }
+
+    public void setTypeJeu(String typeJeu) {
+        this.typeJeu = typeJeu;
+    }
+
+    public int getNbJoueursRequis() {
+        return nbJoueursRequis;
+    }
+
+    public void setNbJoueursRequis(int nbJoueursRequis) {
+        this.nbJoueursRequis = nbJoueursRequis;
     }
 }

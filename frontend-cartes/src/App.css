@@ -138,6 +138,88 @@ body {
 
 .create-btns { display: flex; gap: 8px; align-items: center; }
 
+/* ===== PANNEAU DE CRÉATION DE PARTIE ===== */
+.create-panel {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.create-panel-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.create-label {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  min-width: 40px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.create-modes {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.mode-btn {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06);
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.mode-btn:hover:not(.mode-btn-disabled) {
+  background: rgba(255,255,255,0.12);
+  border-color: rgba(255,255,255,0.3);
+}
+.mode-btn-active {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: #fff;
+  font-weight: 600;
+}
+.mode-btn-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.bientot {
+  font-size: 0.65rem;
+  opacity: 0.7;
+  margin-left: 3px;
+}
+
+.create-btn-main {
+  width: 100%;
+  padding: 9px;
+  font-size: 0.92rem;
+  margin: 0;
+}
+
+/* Badge mode dans la liste des parties */
+.badge-mode {
+  background: #7c3aed;
+  color: #fff;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
 /* ===== HEADER ===== */
 .header {
   display: flex;
@@ -596,7 +678,64 @@ body {
   justify-content: center;
 }
 
-/* ===== CARTE ===== */
+/* ===== CARTE SVG ===== */
+.carte-svg {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: default;
+  border-radius: 6px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  line-height: 0;
+}
+
+.carte-svg.jouable {
+  cursor: pointer;
+}
+.carte-svg.jouable:hover {
+  transform: translateY(-14px) scale(1.08);
+  box-shadow: 0 14px 28px rgba(0,0,0,0.45);
+  z-index: 10;
+}
+.carte-svg.jouable:hover svg {
+  filter: drop-shadow(0 0 6px rgba(255, 200, 0, 0.8));
+}
+.carte-svg.jouable:active {
+  transform: translateY(-7px) scale(1.03);
+}
+
+.carte-svg.inactive {
+  opacity: 0.65;
+  filter: saturate(0.5);
+}
+
+/* Mini cartes SVG dans le pli courant / dernier pli */
+.mini-carte-svg {
+  line-height: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+
+/* Dos de carte affiché sur les slots adversaires */
+.joueur-dos-cartes {
+  margin-top: 4px;
+  opacity: 0.7;
+  line-height: 0;
+}
+
+/* Badge mode spécial (Sans-atout / Tout-atout) dans BiddingPanel */
+.mode-special-badge {
+  background: var(--warning);
+  color: #000;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+/* ===== CARTE (texte, conservé pour fallback) ===== */
 .carte {
   width: 70px;
   height: 105px;
@@ -719,3 +858,251 @@ body {
   outline: none;
 }
 .chat-input-row input:focus { border-color: var(--accent); }
+
+/* ===== TAROT ===== */
+
+/* Table Tarot — conteneur à positionnement absolu pour 3/4/5 joueurs */
+.tarot-table {
+  display: block;
+  padding: 12px;
+  position: relative;
+  min-height: 360px;
+}
+
+/* Centre du pli — superpose la grille héritée de .table-feutre */
+.tarot-table .pli-centre {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  grid-area: unset;
+  width: auto;
+  min-width: 220px;
+  text-align: center;
+}
+
+.joueur-info-tarot {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  border: 2px solid rgba(255,255,255,0.12);
+  border-radius: 10px;
+  padding: 6px 12px;
+  font-size: 0.85rem;
+  color: var(--text);
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.joueur-actif-tarot {
+  background: rgba(74, 222, 128, 0.15);
+  border: 1px solid var(--accent);
+  color: var(--accent);
+}
+
+.tour-indicator-mini { font-size: 0.7rem; color: var(--accent); }
+
+/* Tarot enchères */
+.tarot-bid-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 12px;
+}
+
+.tarot-bid-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 14px;
+  gap: 2px;
+}
+
+.bid-mult {
+  font-size: 0.72rem;
+  opacity: 0.75;
+}
+
+.tarot-bid-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* Panel chien */
+.chien-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 20;
+  border-radius: var(--radius);
+}
+
+.chien-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  max-width: 760px;
+  width: 95%;
+  text-align: center;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+.chien-titre {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-h);
+  margin-bottom: 16px;
+}
+
+.chien-cartes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.chien-carte {
+  position: relative;
+  background: none;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  padding: 2px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.chien-carte-sel {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+
+.chien-sel-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: var(--accent);
+  color: #000;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  font-size: 0.7rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+
+.chien-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chien-count {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.chien-carte-info {
+  cursor: default;
+  border: 2px solid rgba(255,255,255,0.18);
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.chien-contrat-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 6px;
+}
+
+.chien-instruction {
+  font-size: 0.88rem;
+  color: var(--text);
+  margin: 14px 0 10px;
+  line-height: 1.5;
+}
+
+.chien-regle {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+/* Main complète du preneur pour sélectionner l'écart */
+.chien-main-selection {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin-bottom: 14px;
+  padding: 10px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.07);
+}
+
+/* Enrichir le panel d'enchères Tarot (typeBid dans historique) */
+.e-contrat { color: var(--accent); }
+.e-passe   { color: var(--text-muted); }
+
+/* =========================================================
+   RoiSelector — appel du Roi (5 joueurs)
+   ========================================================= */
+.roi-selector {
+  min-width: 340px;
+}
+
+.roi-instruction {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+.roi-boutons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.roi-btn {
+  font-size: 1rem;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.roi-coeur,
+.roi-carreau {
+  color: #c0392b;
+}
+
+.roi-trefle,
+.roi-pique {
+  color: #ecf0f1;
+}
+
+.roi-btn-grise {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}
+
+.roi-possede {
+  font-size: 0.75rem;
+  opacity: 0.75;
+  margin-left: 4px;
+}

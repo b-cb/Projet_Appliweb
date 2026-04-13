@@ -14,6 +14,9 @@ public class Enchere {
     private String couleur;  // null si passe
     private boolean passe;   // true = le joueur a passé
 
+    // Tarot : type d'enchère ("PETITE"|"GARDE"|"GARDE_SANS"|"GARDE_CONTRE"|"PASSE") — null pour coinche
+    private String typeBid;
+
     @JsonIgnore
     @ManyToOne(optional = false)
     @JoinColumn(name = "partie_id")
@@ -72,6 +75,14 @@ public class Enchere {
 
     public void setPasse(boolean passe) {
         this.passe = passe;
+    }
+
+    public String getTypeBid() {
+        return typeBid;
+    }
+
+    public void setTypeBid(String typeBid) {
+        this.typeBid = typeBid;
     }
 
 }

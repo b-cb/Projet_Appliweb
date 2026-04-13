@@ -22,6 +22,7 @@ public class PartieService {
     private final SimpMessagingTemplate messagingTemplate;
     private final JeuService jeuService;
     private final BotService botService;
+    private final TarotService tarotService;
 
     public PartieService(PartieRepository partieRepository,
                          JoueurRepository joueurRepository,
@@ -29,7 +30,8 @@ public class PartieService {
                          CarteRepository carteRepository,
                          SimpMessagingTemplate messagingTemplate,
                          JeuService jeuService,
-                         @Lazy BotService botService) {
+                         @Lazy BotService botService,
+                         @Lazy TarotService tarotService) {
         this.partieRepository = partieRepository;
         this.joueurRepository = joueurRepository;
         this.utilisateurRepository = utilisateurRepository;
@@ -37,13 +39,20 @@ public class PartieService {
         this.messagingTemplate = messagingTemplate;
         this.jeuService = jeuService;
         this.botService = botService;
+        this.tarotService = tarotService;
     }
 
     public Partie creerPartie() {
+        return creerPartie("COINCHE", 4);
+    }
+
+    public Partie creerPartie(String typeJeu, int nbJoueurs) {
         Partie partie = new Partie();
         partie.setStatut("OUVERTE");
         partie.setScoreA(0);
         partie.setScoreB(0);
+        partie.setTypeJeu(typeJeu != null ? typeJeu : "COINCHE");
+        partie.setNbJoueursRequis(nbJoueurs > 0 ? nbJoueurs : 4);
         return partieRepository.save(partie);
     }
 
@@ -52,7 +61,7 @@ public class PartieService {
      * puis déclenche le jeu automatique si le premier joueur est un bot.
      */
     public Partie creerEtDemarrerAvecBots(Long utilisateurId) {
-        // 1. Créer la partie
+        // 1. Créer la partie (coinche 4 joueurs)
         Partie partie = creerPartie();
         Long partieId = partie.getId();
 
@@ -94,8 +103,8 @@ public class PartieService {
         }
 
         List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
-        if (joueurs.size() >= 4) {
-            throw new BusinessException("La partie est déjà pleine (4 joueurs max).");
+        if (joueurs.size() >= partie.getNbJoueursRequis()) {
+            throw new BusinessException("La partie est déjà pleine (" + partie.getNbJoueursRequis() + " joueurs max).");
         }
 
         boolean dejaPresent = joueurs.stream()
@@ -131,9 +140,14 @@ public class PartieService {
         }
 
         List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
-        if (joueurs.size() != 4) {
+        int requis = partie.getNbJoueursRequis() > 0 ? partie.getNbJoueursRequis() : 4;
+        if (joueurs.size() != requis) {
             throw new BusinessException(
-                    "Il faut exactement 4 joueurs pour démarrer (actuellement " + joueurs.size() + ").");
+                    "Il faut exactement " + requis + " joueurs pour démarrer (actuellement " + joueurs.size() + ").");
+        }
+
+        if ("TAROT".equals(partie.getTypeJeu())) {
+            return demarrerPartieTarot(partieId, partie, joueurs);
         }
 
         // Créer le jeu de 32 cartes
@@ -211,5 +225,105 @@ public class PartieService {
             throw new ResourceNotFoundException("Partie #" + partieId + " introuvable.");
         }
         return joueurRepository.findByPartie_Id(partieId);
+    }
+
+    /**
+     * Démarre une partie Tarot : distribue 78 cartes, met le chien de côté.
+     */
+    @org.springframework.transaction.annotation.Transactional
+    /**
+     * Crée une partie Tarot avec bots et la démarre immédiatement.
+     * - Tarot 3j : 1 humain + 2 bots (Bot_1, Bot_2)
+     * - Tarot 4j : 1 humain + 3 bots (Bot_1, Bot_2, Bot_3)
+     * - Tarot 5j : 1 humain + 4 bots (Bot_1, Bot_2, Bot_3, Bot_4)
+     */
+    public Partie creerEtDemarrerTarotAvecBots(Long utilisateurId, int nbJoueurs) {
+        int nbBots = nbJoueurs - 1;
+        Partie partie = creerPartie("TAROT", nbJoueurs);
+        Long partieId = partie.getId();
+
+        rejoindrePartie(partieId, utilisateurId);
+
+        for (int i = 0; i < nbBots; i++) {
+            String botPseudo = BotInitializer.BOT_PSEUDOS[i];
+            Utilisateur bot = utilisateurRepository.findByPseudo(botPseudo)
+                    .orElseThrow(() -> new ResourceNotFoundException("Bot introuvable."));
+            rejoindrePartie(partieId, bot.getId());
+        }
+
+        return demarrerPartie(partieId);
+    }
+
+    private Partie demarrerPartieTarot(Long partieId, Partie partie, List<Joueur> joueurs) {
+        int nbJoueurs = partie.getNbJoueursRequis();
+
+        // Taille du chien selon le nombre de joueurs
+        int tailleChien = (nbJoueurs == 5) ? 3 : 6;
+
+        // Construire le jeu de 78 cartes Tarot
+        List<Carte> paquet = new ArrayList<>();
+
+        // 4 couleurs × 14 cartes (1-10, Valet, Cavalier, Dame, Roi)
+        String[] couleurs = {"Coeur", "Carreau", "Trefle", "Pique"};
+        String[] valeursCouleur = {"1","2","3","4","5","6","7","8","9","10","Valet","Cavalier","Dame","Roi"};
+        for (String couleur : couleurs) {
+            for (String valeur : valeursCouleur) {
+                Carte c = new Carte();
+                c.setCouleur(couleur);
+                c.setValeur(valeur);
+                paquet.add(carteRepository.save(c));
+            }
+        }
+
+        // 21 atouts numérotés (1-21)
+        for (int i = 1; i <= 21; i++) {
+            Carte c = new Carte();
+            c.setCouleur("Atout");
+            c.setValeur(String.valueOf(i));
+            paquet.add(carteRepository.save(c));
+        }
+
+        // L'Excuse
+        Carte excuse = new Carte();
+        excuse.setCouleur("Atout");
+        excuse.setValeur("Excuse");
+        paquet.add(carteRepository.save(excuse));
+
+        // Mélanger
+        Collections.shuffle(paquet);
+
+        // Distribuer N cartes à chaque joueur
+        int cartesParJoueur = (paquet.size() - tailleChien) / nbJoueurs;
+        for (int i = 0; i < nbJoueurs; i++) {
+            Joueur j = joueurs.get(i);
+            List<Carte> main = paquet.subList(i * cartesParJoueur, (i + 1) * cartesParJoueur);
+            j.setCartesEnMain(new ArrayList<>(main));
+            j.setEquipe(0); // équipes inconnues jusqu'à l'enchère
+            joueurRepository.save(j);
+        }
+
+        // Les dernières cartes forment le chien
+        List<Carte> chien = paquet.subList(nbJoueurs * cartesParJoueur, paquet.size());
+        partie.setChien(new ArrayList<>(chien));
+
+        // Initialiser l'état de la partie
+        partie.setStatut("EN_ENCHERE");
+        partie.setPhaseJeu(null);
+        partie.setTourJoueurIndex(0);
+        partie.setPassesConsecutives(0);
+        partie.setNumPliCourant(0);
+        partieRepository.save(partie);
+
+        // Push WebSocket
+        List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);
+        for (Joueur j : joueursActualises) {
+            fr.enseeiht.jeux.dto.EtatJeuTarotDTO etat = tarotService.getEtatJeuTarot(partieId, j.getUtilisateur().getId());
+            messagingTemplate.convertAndSend(
+                    "/topic/partie/" + partieId + "/joueur/" + j.getUtilisateur().getId(),
+                    fr.enseeiht.jeux.dto.EvenementJeuDTO.of(fr.enseeiht.jeux.dto.EvenementJeuDTO.Type.ENCHERE, etat)
+            );
+        }
+
+        return partie;
     }
 }

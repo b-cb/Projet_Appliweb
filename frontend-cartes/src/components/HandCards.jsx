@@ -1,19 +1,15 @@
-const SYMBOLES = { Coeur: '♥', Carreau: '♦', Trefle: '♣', Pique: '♠' }
-const COULEUR_CSS = { Coeur: 'rouge', Carreau: 'rouge', Trefle: 'noir', Pique: 'noir' }
+import CardImage from './CardImage'
 
 function Carte({ carte, jouable, onClick }) {
-  const sym = SYMBOLES[carte.couleur] || carte.couleur
-  const cls = COULEUR_CSS[carte.couleur] || 'noir'
   return (
     <button
-      className={`carte ${cls} ${jouable ? 'jouable' : 'inactive'}`}
+      className={`carte-svg ${jouable ? 'jouable' : 'inactive'}`}
       onClick={jouable ? onClick : undefined}
       disabled={!jouable}
       title={`${carte.valeur} de ${carte.couleur}`}
+      aria-label={`${carte.valeur} de ${carte.couleur}`}
     >
-      <span className="carte-val-top">{carte.valeur}</span>
-      <span className="carte-sym">{sym}</span>
-      <span className="carte-val-bot">{carte.valeur}</span>
+      <CardImage carte={carte} largeur={70} />
     </button>
   )
 }

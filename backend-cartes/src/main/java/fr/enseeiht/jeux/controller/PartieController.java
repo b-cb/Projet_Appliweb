@@ -7,6 +7,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api")
@@ -21,12 +22,21 @@ public class PartieController {
     @PostMapping("/partie/creer")
     public ResponseEntity<PartieDTO> creerPartie(
             @RequestParam(defaultValue = "false") boolean avecBots,
-            @RequestParam(required = false) Long utilisateurId) {
+            @RequestParam(required = false) Long utilisateurId,
+            @RequestBody(required = false) Map<String, Object> body) {
+        String typeJeu = body != null ? (String) body.getOrDefault("typeJeu", "COINCHE") : "COINCHE";
+        int nbJoueurs = body != null && body.containsKey("nbJoueurs")
+                ? ((Number) body.get("nbJoueurs")).intValue() : 4;
+
         if (avecBots && utilisateurId != null) {
+            if ("TAROT".equals(typeJeu)) {
+                return ResponseEntity.ok(PartieDTO.fromEntity(
+                        partieService.creerEtDemarrerTarotAvecBots(utilisateurId, nbJoueurs)));
+            }
             return ResponseEntity.ok(PartieDTO.fromEntity(
                     partieService.creerEtDemarrerAvecBots(utilisateurId)));
         }
-        return ResponseEntity.ok(PartieDTO.fromEntity(partieService.creerPartie()));
+        return ResponseEntity.ok(PartieDTO.fromEntity(partieService.creerPartie(typeJeu, nbJoueurs)));
     }
 
     @GetMapping("/parties")

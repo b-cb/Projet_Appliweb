@@ -37,14 +37,22 @@ export async function fetchPartie(token, partieId) {
   return res.ok ? res.json() : null
 }
 
-export async function creerPartie(token) {
-  const res = await fetch(`${BASE}/partie/creer`, { method: 'POST', headers: headers(token) })
+export async function creerPartie(token, options = {}) {
+  const { typeJeu = 'COINCHE', nbJoueurs = 4 } = options
+  const res = await fetch(`${BASE}/partie/creer`, {
+    method: 'POST',
+    headers: headers(token),
+    body: JSON.stringify({ typeJeu, nbJoueurs })
+  })
   return { ok: res.ok, data: await res.json() }
 }
 
-export async function creerPartieAvecBots(token, utilisateurId) {
+export async function creerPartieAvecBots(token, utilisateurId, options = {}) {
+  const { typeJeu = 'COINCHE', nbJoueurs = 4 } = options
   const res = await fetch(`${BASE}/partie/creer?avecBots=true&utilisateurId=${utilisateurId}`, {
-    method: 'POST', headers: headers(token)
+    method: 'POST',
+    headers: headers(token),
+    body: JSON.stringify({ typeJeu, nbJoueurs })
   })
   return { ok: res.ok, data: await res.json() }
 }
@@ -138,4 +146,40 @@ export async function accepterInvitation(token, invId) {
 export async function refuserInvitation(token, invId) {
   const res = await fetch(`${BASE}/invitation/${invId}/refuser`, { method: 'POST', headers: headers(token) })
   return { ok: res.ok }
+}
+
+// Tarot
+export async function fetchEtatJeuTarot(token, partieId, utilisateurId) {
+  const res = await fetch(`${BASE}/partie/${partieId}/tarot/etat?utilisateurId=${utilisateurId}`, {
+    headers: headers(token)
+  })
+  return res.ok ? res.json() : null
+}
+
+export async function enchirirTarot(token, partieId, utilisateurId, typeBid) {
+  const res = await fetch(`${BASE}/partie/${partieId}/tarot/encherir?utilisateurId=${utilisateurId}`, {
+    method: 'POST', headers: headers(token), body: JSON.stringify({ typeBid })
+  })
+  return { ok: res.ok, data: await res.json().catch(() => null) }
+}
+
+export async function ecarterCartes(token, partieId, utilisateurId, carteIds) {
+  const res = await fetch(`${BASE}/partie/${partieId}/tarot/ecarter?utilisateurId=${utilisateurId}`, {
+    method: 'POST', headers: headers(token), body: JSON.stringify({ carteIds })
+  })
+  return { ok: res.ok, data: await res.json().catch(() => null) }
+}
+
+export async function jouerCarteTarot(token, partieId, utilisateurId, carteId) {
+  const res = await fetch(`${BASE}/partie/${partieId}/tarot/jouer?utilisateurId=${utilisateurId}`, {
+    method: 'POST', headers: headers(token), body: JSON.stringify({ carteId })
+  })
+  return { ok: res.ok, data: await res.json().catch(() => null) }
+}
+
+export async function appelerRoiTarot(token, partieId, utilisateurId, couleur) {
+  const res = await fetch(`${BASE}/partie/${partieId}/tarot/appeler-roi?utilisateurId=${utilisateurId}`, {
+    method: 'POST', headers: headers(token), body: JSON.stringify({ couleur })
+  })
+  return { ok: res.ok, data: await res.json().catch(() => null) }
 }

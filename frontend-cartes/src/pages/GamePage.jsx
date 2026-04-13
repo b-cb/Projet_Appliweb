@@ -7,10 +7,32 @@ import PlayerTable from '../components/PlayerTable'
 import HandCards from '../components/HandCards'
 import BiddingPanel from '../components/BiddingPanel'
 import ChatPanel from '../components/ChatPanel'
+import TarotGamePage from './TarotGamePage'
 
 const SYMBOLES = { Coeur: '♥', Carreau: '♦', Trefle: '♣', Pique: '♠' }
 
 export default function GamePage() {
+  const { id: partieId } = useParams()
+  const { token } = useAuth()
+  const [typeJeu, setTypeJeu] = useState(null)
+
+  useEffect(() => {
+    api.fetchPartie(token, partieId).then(p => {
+      if (p) setTypeJeu(p.typeJeu || 'COINCHE')
+    })
+  }, [partieId, token])
+
+  if (typeJeu === 'TAROT') return <TarotGamePage />
+  if (typeJeu === null) return (
+    <div className="app" style={{ alignItems: 'center', justifyContent: 'center' }}>
+      <p style={{ color: 'var(--text-muted)' }}>Chargement…</p>
+    </div>
+  )
+
+  return <CoinchePage />
+}
+
+function CoinchePage() {
   const { id: partieId } = useParams()
   const { utilisateur, token, logout } = useAuth()
   const navigate = useNavigate()

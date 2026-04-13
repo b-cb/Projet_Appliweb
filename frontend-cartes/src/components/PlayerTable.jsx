@@ -1,5 +1,4 @@
-const SYMBOLES = { Coeur: '♥', Carreau: '♦', Trefle: '♣', Pique: '♠' }
-const COULEUR_CSS = { Coeur: 'rouge', Carreau: 'rouge', Trefle: 'noir', Pique: 'noir' }
+import CardImage from './CardImage'
 
 function positionVisuelle(maPosition, autrePosition) {
   const delta = (autrePosition - maPosition + 4) % 4
@@ -7,11 +6,9 @@ function positionVisuelle(maPosition, autrePosition) {
 }
 
 function MiniCarte({ carte }) {
-  const sym = SYMBOLES[carte.couleur] || ''
-  const cls = COULEUR_CSS[carte.couleur] || 'noir'
   return (
-    <div className={`mini-carte ${cls}`}>
-      {carte.valeur} {sym}
+    <div className="mini-carte-svg">
+      <CardImage carte={carte} largeur={42} />
     </div>
   )
 }
@@ -36,6 +33,10 @@ export default function PlayerTable({ etatJeu, joueurs, utilisateur }) {
             <div className="joueur-nom">{j.pseudo || `J${pos}`}</div>
             <div className={`joueur-equipe eq${j.equipe}`}>Équipe {j.equipe}</div>
             {estSonTour && <div className="tour-indicator">▶ Son tour</div>}
+            {/* Dos de cartes symbolisant la main adverse */}
+            <div className="joueur-dos-cartes">
+              <CardImage dos largeur={28} />
+            </div>
           </div>
         )
       })}

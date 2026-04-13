@@ -8,6 +8,7 @@ public class EnchereDTO {
     private boolean passe;
     private int contrat;
     private String couleur;
+    private String typeBid;  // Tarot : "PETITE"|"GARDE"|"GARDE_SANS"|"GARDE_CONTRE"|"PASSE"
     private Long joueurId;
     private String pseudoJoueur;
 
@@ -19,6 +20,7 @@ public class EnchereDTO {
         dto.passe = e.isPasse();
         dto.contrat = e.getContrat();
         dto.couleur = e.getCouleur();
+        dto.typeBid = e.getTypeBid();
         dto.joueurId = e.getPreneur().getId();
         dto.pseudoJoueur = e.getPreneur().getUtilisateur().getPseudo();
         return dto;
@@ -28,12 +30,14 @@ public class EnchereDTO {
     public boolean isPasse() { return passe; }
     public int getContrat() { return contrat; }
     public String getCouleur() { return couleur; }
+    public String getTypeBid() { return typeBid; }
     public Long getJoueurId() { return joueurId; }
     public String getPseudoJoueur() { return pseudoJoueur; }
     public void setId(Long id) { this.id = id; }
     public void setPasse(boolean passe) { this.passe = passe; }
     public void setContrat(int contrat) { this.contrat = contrat; }
     public void setCouleur(String couleur) { this.couleur = couleur; }
+    public void setTypeBid(String typeBid) { this.typeBid = typeBid; }
     public void setJoueurId(Long joueurId) { this.joueurId = joueurId; }
     public void setPseudoJoueur(String pseudoJoueur) { this.pseudoJoueur = pseudoJoueur; }
 }

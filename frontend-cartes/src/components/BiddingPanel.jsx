@@ -1,10 +1,26 @@
 import { useState } from 'react'
 
-const SYMBOLES = { Coeur: '♥', Carreau: '♦', Trefle: '♣', Pique: '♠' }
+const SYMBOLES = {
+  Coeur: '♥',
+  Carreau: '♦',
+  Trefle: '♣',
+  Pique: '♠',
+  'Sans-atout': 'SA',
+  'Tout-atout': 'TA',
+}
+
+const COULEURS_NORMALES = ['Coeur', 'Carreau', 'Trefle', 'Pique']
+const MODES_SPECIAUX = ['Sans-atout', 'Tout-atout']
+const TOUTES_COULEURS = [...COULEURS_NORMALES, ...MODES_SPECIAUX]
 
 export default function BiddingPanel({ etatJeu, monTour, onEncherir }) {
   const [contrat, setContrat] = useState(80)
   const [couleur, setCouleur] = useState('Coeur')
+
+  const modeSpecial = MODES_SPECIAUX.includes(couleur)
+
+  const libelleCouleur = (c) =>
+    MODES_SPECIAUX.includes(c) ? `${SYMBOLES[c]} ${c}` : `${SYMBOLES[c]} ${c}`
 
   return (
     <div className="enchere-centre">
@@ -15,7 +31,11 @@ export default function BiddingPanel({ etatJeu, monTour, onEncherir }) {
           {etatJeu.encheres.map(e => (
             <li key={e.id} className={e.passe ? 'e-passe' : 'e-contrat'}>
               <strong>{e.pseudoJoueur}</strong> :{' '}
-              {e.passe ? 'Passe' : `${e.contrat} ${SYMBOLES[e.couleur] || ''} ${e.couleur}`}
+              {e.passe
+                ? 'Passe'
+                : MODES_SPECIAUX.includes(e.couleur)
+                  ? `${e.contrat} ${SYMBOLES[e.couleur] || e.couleur} ${e.couleur}`
+                  : `${e.contrat} ${SYMBOLES[e.couleur] || ''} ${e.couleur}`}
             </li>
           ))}
         </ul>
@@ -31,11 +51,24 @@ export default function BiddingPanel({ etatJeu, monTour, onEncherir }) {
               </option>
             ))}
           </select>
+
           <select value={couleur} onChange={e => setCouleur(e.target.value)}>
-            {['Coeur', 'Carreau', 'Trefle', 'Pique'].map(c => (
-              <option key={c} value={c}>{SYMBOLES[c]} {c}</option>
-            ))}
+            <optgroup label="Couleur">
+              {COULEURS_NORMALES.map(c => (
+                <option key={c} value={c}>{SYMBOLES[c]} {c}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Mode spécial">
+              {MODES_SPECIAUX.map(c => (
+                <option key={c} value={c}>{SYMBOLES[c]} {c}</option>
+              ))}
+            </optgroup>
           </select>
+
+          {modeSpecial && (
+            <span className="mode-special-badge">{couleur}</span>
+          )}
+
           <button className="btn-primary btn-sm" onClick={() => onEncherir({ passe: false, contrat, couleur })}>
             Enchérir
           </button>

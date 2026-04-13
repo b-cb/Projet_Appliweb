@@ -15,6 +15,11 @@ export default function LobbyPage() {
   const [invitPseudo, setInvitPseudo] = useState('')
   const [flash, setFlash] = useState('')
 
+  // Panneau de création de partie
+  const [modeJeu, setModeJeu] = useState('COINCHE')   // COINCHE | TAROT
+  const [nbJoueursMode, setNbJoueursMode] = useState(4)
+  const [avecBots, setAvecBots] = useState(false)
+
   const afficherFlash = (msg) => { setFlash(msg); setTimeout(() => setFlash(''), 3000) }
 
   const chargerParties = useCallback(async () => {
@@ -50,23 +55,29 @@ export default function LobbyPage() {
   }
 
   const creerPartie = async () => {
-    const { ok, data } = await api.creerPartie(token)
-    if (ok) {
-      afficherFlash(`Partie #${data.id} créée !`)
-      await api.rejoindrePartie(token, data.id, utilisateur.id)
-      chargerParties()
-      selectionnerPartie(data.id)
-    }
-  }
-
-  const creerAvecBots = async () => {
-    const { ok, data } = await api.creerPartieAvecBots(token, utilisateur.id)
-    if (ok) {
-      afficherFlash(`Partie #${data.id} avec bots créée !`)
-      chargerParties()
-      navigate(`/partie/${data.id}`)
+    if (avecBots) {
+      // Création avec bots : démarre directement (coinche ou tarot)
+      const { ok, data } = await api.creerPartieAvecBots(token, utilisateur.id, {
+        typeJeu: modeJeu, nbJoueurs: nbJoueursMode
+      })
+      if (ok) {
+        afficherFlash(`Partie #${data.id} avec bots créée !`)
+        chargerParties()
+        navigate(`/partie/${data.id}`)
+      } else {
+        afficherFlash(data?.erreur || 'Erreur lors de la création avec bots.')
+      }
     } else {
-      afficherFlash(data?.erreur || 'Erreur lors de la création avec bots.')
+      // Création standard avec options (mode + nb joueurs)
+      const { ok, data } = await api.creerPartie(token, { typeJeu: modeJeu, nbJoueurs: nbJoueursMode })
+      if (ok) {
+        afficherFlash(`Partie #${data.id} créée !`)
+        await api.rejoindrePartie(token, data.id, utilisateur.id)
+        chargerParties()
+        selectionnerPartie(data.id)
+      } else {
+        afficherFlash(data?.erreur || 'Erreur lors de la création.')
+      }
     }
   }
 
@@ -141,10 +152,51 @@ export default function LobbyPage() {
         <div className="panel">
           <div className="panel-header">
             <h2>Parties ({parties.length})</h2>
-            <div className="create-btns">
-              <button className="btn-primary" onClick={creerPartie}>+ Créer</button>
-              <button className="btn-small btn-bots" onClick={creerAvecBots}>🤖 Avec bots</button>
+          </div>
+
+          {/* Panneau de création */}
+          <div className="create-panel">
+            <div className="create-panel-row">
+              <label className="create-label">Mode</label>
+              <div className="create-modes">
+                {[
+                  { label: 'Coinche (4j)', typeJeu: 'COINCHE', nb: 4 },
+                  { label: 'Tarot 3j', typeJeu: 'TAROT', nb: 3 },
+                  { label: 'Tarot 4j', typeJeu: 'TAROT', nb: 4 },
+                  { label: 'Tarot 5j', typeJeu: 'TAROT', nb: 5 },
+                ].map(({ label, typeJeu, nb, disabled }) => (
+                  <button
+                    key={label}
+                    className={`mode-btn ${modeJeu === typeJeu && nbJoueursMode === nb ? 'mode-btn-active' : ''} ${disabled ? 'mode-btn-disabled' : ''}`}
+                    onClick={() => { if (!disabled) { setModeJeu(typeJeu); setNbJoueursMode(nb) } }}
+                    title={disabled ? 'Bientôt disponible' : undefined}
+                  >
+                    {label}{disabled && <span className="bientot"> soon</span>}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            <div className="create-panel-row">
+              <label className="create-label">
+                <input
+                  type="checkbox"
+                  checked={avecBots}
+                  onChange={e => setAvecBots(e.target.checked)}
+                  style={{ marginRight: 6 }}
+                />
+                Remplir avec des bots
+                {modeJeu === 'TAROT' && nbJoueursMode === 5 && avecBots && (
+                  <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginLeft: 6 }}>
+                    (1 humain + 4 bots)
+                  </span>
+                )}
+              </label>
+            </div>
+
+            <button className="btn-primary create-btn-main" onClick={creerPartie}>
+              + Créer la partie
+            </button>
           </div>
 
           {parties.length === 0
@@ -160,6 +212,9 @@ export default function LobbyPage() {
                       <span className={`badge ${p.statut === 'OUVERTE' ? 'badge-open' : 'badge-playing'}`}>
                         {p.statut === 'OUVERTE' ? 'Ouverte' : p.statut === 'EN_ENCHERE' ? 'Enchères' : 'En jeu'}
                       </span>
+                      {p.typeJeu && p.typeJeu !== 'COINCHE' && (
+                        <span className="badge badge-mode">{p.typeJeu}</span>
+                      )}
                     </div>
                     <div className="party-scores">Éq.A: {p.scoreA} — Éq.B: {p.scoreB}</div>
                     {p.statut === 'OUVERTE' && (

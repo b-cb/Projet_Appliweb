@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class BotInitializer implements ApplicationRunner {
 
-    public static final String[] BOT_PSEUDOS = {"Bot_1", "Bot_2", "Bot_3"};
+    public static final String[] BOT_PSEUDOS = {"Bot_1", "Bot_2", "Bot_3", "Bot_4"};
 
     private final UtilisateurRepository utilisateurRepository;
     private final PasswordEncoder passwordEncoder;

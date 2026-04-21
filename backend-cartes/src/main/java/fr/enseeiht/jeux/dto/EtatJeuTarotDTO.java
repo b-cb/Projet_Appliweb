@@ -55,6 +55,16 @@ public class EtatJeuTarotDTO {
     private int pointsPreneurX2;
     private int seuilCourant;  // seuil basé sur les bouts actuellement capturés
 
+    // Multi-manche
+    private int donneActuelle;
+    private int maxDonnes;
+    private int maxPoints;
+    private int scoreGlobalA;
+    private int scoreGlobalB;
+
+    // Poignée
+    private String poigneeDeclaree;
+
     public EtatJeuTarotDTO() {}
 
     // --- Getters / Setters ---
@@ -136,6 +146,24 @@ public class EtatJeuTarotDTO {
 
     public int getSeuilCourant() { return seuilCourant; }
     public void setSeuilCourant(int seuilCourant) { this.seuilCourant = seuilCourant; }
+
+    public int getDonneActuelle() { return donneActuelle; }
+    public void setDonneActuelle(int donneActuelle) { this.donneActuelle = donneActuelle; }
+
+    public int getMaxDonnes() { return maxDonnes; }
+    public void setMaxDonnes(int maxDonnes) { this.maxDonnes = maxDonnes; }
+
+    public int getMaxPoints() { return maxPoints; }
+    public void setMaxPoints(int maxPoints) { this.maxPoints = maxPoints; }
+
+    public int getScoreGlobalA() { return scoreGlobalA; }
+    public void setScoreGlobalA(int scoreGlobalA) { this.scoreGlobalA = scoreGlobalA; }
+
+    public int getScoreGlobalB() { return scoreGlobalB; }
+    public void setScoreGlobalB(int scoreGlobalB) { this.scoreGlobalB = scoreGlobalB; }
+
+    public String getPoigneeDeclaree() { return poigneeDeclaree; }
+    public void setPoigneeDeclaree(String poigneeDeclaree) { this.poigneeDeclaree = poigneeDeclaree; }
 
     // --- Inner DTOs ---
 

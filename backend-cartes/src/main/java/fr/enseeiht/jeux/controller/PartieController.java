@@ -27,16 +27,20 @@ public class PartieController {
         String typeJeu = body != null ? (String) body.getOrDefault("typeJeu", "COINCHE") : "COINCHE";
         int nbJoueurs = body != null && body.containsKey("nbJoueurs")
                 ? ((Number) body.get("nbJoueurs")).intValue() : 4;
+        int maxDonnes = body != null && body.containsKey("maxDonnes")
+                ? ((Number) body.get("maxDonnes")).intValue() : 0;
+        int maxPoints = body != null && body.containsKey("maxPoints")
+                ? ((Number) body.get("maxPoints")).intValue() : 0;
 
         if (avecBots && utilisateurId != null) {
             if ("TAROT".equals(typeJeu)) {
                 return ResponseEntity.ok(PartieDTO.fromEntity(
-                        partieService.creerEtDemarrerTarotAvecBots(utilisateurId, nbJoueurs)));
+                        partieService.creerEtDemarrerTarotAvecBots(utilisateurId, nbJoueurs, maxDonnes, maxPoints)));
             }
             return ResponseEntity.ok(PartieDTO.fromEntity(
-                    partieService.creerEtDemarrerAvecBots(utilisateurId)));
+                    partieService.creerEtDemarrerAvecBots(utilisateurId, maxDonnes, maxPoints)));
         }
-        return ResponseEntity.ok(PartieDTO.fromEntity(partieService.creerPartie(typeJeu, nbJoueurs)));
+        return ResponseEntity.ok(PartieDTO.fromEntity(partieService.creerPartie(typeJeu, nbJoueurs, maxDonnes, maxPoints)));
     }
 
     @GetMapping("/parties")

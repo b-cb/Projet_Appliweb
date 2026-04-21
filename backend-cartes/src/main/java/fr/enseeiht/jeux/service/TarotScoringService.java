@@ -135,4 +135,36 @@ public class TarotScoringService {
     public boolean isBout(Carte c) {
         return "Atout".equals(c.getCouleur()) && BOUTS_VALEURS.contains(c.getValeur());
     }
+
+    /**
+     * Bonus de Poignée (en points entiers, avant multiplication).
+     * Si le preneur remplit son contrat, il gagne le bonus ; sinon les défenseurs le gagnent.
+     * SIMPLE = 20 pts, DOUBLE = 30 pts, TRIPLE = 40 pts
+     *
+     * @param poigneeDeclaree "SIMPLE"|"DOUBLE"|"TRIPLE"|null
+     * @return bonus en points entiers (0 si null)
+     */
+    public int poigneeBonus(String poigneeDeclaree) {
+        if (poigneeDeclaree == null) return 0;
+        return switch (poigneeDeclaree) {
+            case "SIMPLE" -> 20;
+            case "DOUBLE" -> 30;
+            case "TRIPLE" -> 40;
+            default -> 0;
+        };
+    }
+
+    /**
+     * Nombre d'atouts (hors Excuse) requis pour déclarer une poignée selon le nombre de joueurs.
+     * nbJoueurs=3: Simple=13, Double=15, Triple=18
+     * nbJoueurs=4: Simple=10, Double=13, Triple=15
+     * nbJoueurs=5: Simple=8,  Double=10, Triple=13
+     */
+    public int nbAtouttsPourPoignee(int nbJoueurs, String poigneeType) {
+        return switch (nbJoueurs) {
+            case 3 -> switch (poigneeType) { case "SIMPLE" -> 13; case "DOUBLE" -> 15; default -> 18; };
+            case 5 -> switch (poigneeType) { case "SIMPLE" -> 8;  case "DOUBLE" -> 10; default -> 13; };
+            default -> switch (poigneeType) { case "SIMPLE" -> 10; case "DOUBLE" -> 13; default -> 15; };
+        };
+    }
 }

@@ -52,6 +52,7 @@ public class TarotService {
     private final TarotScoringService scoringService;
     private final SimpMessagingTemplate messagingTemplate;
     private final TarotBotService tarotBotService;
+    private final fr.enseeiht.jeux.repository.CarteRepository carteRepository;
 
     public TarotService(PartieRepository partieRepository,
                         JoueurRepository joueurRepository,
@@ -60,7 +61,8 @@ public class TarotService {
                         PliRepository pliRepository,
                         TarotScoringService scoringService,
                         SimpMessagingTemplate messagingTemplate,
-                        @Lazy TarotBotService tarotBotService) {
+                        @Lazy TarotBotService tarotBotService,
+                        fr.enseeiht.jeux.repository.CarteRepository carteRepository) {
         this.partieRepository = partieRepository;
         this.joueurRepository = joueurRepository;
         this.utilisateurRepository = utilisateurRepository;
@@ -69,6 +71,7 @@ public class TarotService {
         this.scoringService = scoringService;
         this.messagingTemplate = messagingTemplate;
         this.tarotBotService = tarotBotService;
+        this.carteRepository = carteRepository;
     }
 
     // =========================================================
@@ -206,6 +209,9 @@ public class TarotService {
             dto.setSeuilCourant(scoringService.seuilPourBouts(bouts));
         }
 
+        // Poignée
+        dto.setPoigneeDeclaree(partie.getPoigneeDeclaree());
+
         // Résultat si terminée
         if ("TERMINEE".equals(partie.getStatut())) {
             dto.setResultat(buildResultatTarot(partie, joueurs));
@@ -254,9 +260,13 @@ public class TarotService {
 
             partie.setPassesConsecutives(partie.getPassesConsecutives() + 1);
 
-            // Si tous les joueurs ont passé sans contrat → annuler la donne
+            // Si tous les joueurs ont passé sans contrat → redémarrer la donne
             if (partie.getPassesConsecutives() >= nbJoueurs) {
-                throw new BusinessException("Tous les joueurs ont passé : la donne est annulée. Redémarrez la partie.");
+                redemarrerDonneTarot(partie, joueurs);
+                partieRepository.save(partie);
+                List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);
+                pushEtatTarotATous(partieId, joueursActualises, EvenementJeuDTO.Type.ENCHERE);
+                return getEtatJeuTarot(partieId, utilisateurId);
             }
 
             // Passer au joueur suivant
@@ -851,10 +861,22 @@ public class TarotService {
         int score = scoringService.calculerScore(
                 pointsPreneurX2, bouts, partie.getEnchereType(), partie.isPetitAuBoutPreneur());
 
+        // Bonus Poignée (s'ajoute au camp gagnant, peu importe qui a déclaré)
+        int bonusPoignee = scoringService.poigneeBonus(partie.getPoigneeDeclaree());
+        if (bonusPoignee > 0) {
+            score = score >= 0 ? score + bonusPoignee : score - bonusPoignee;
+        }
+
         boolean rempli = score > 0;
         int absScore = Math.abs(score);
         boolean cinqJoueurs = partie.getNbJoueursRequis() == 5;
-        boolean jeuSolo5j = cinqJoueurs && partie.getPartenaireId() == null; // preneur tient le Roi
+        boolean jeuSolo5j = cinqJoueurs && partie.getPartenaireId() == null;
+
+        // Accumuler dans les scores globaux de la partie
+        // scoreGlobalA = preneur (ou équipe attaque), scoreGlobalB = défenseurs
+        int deltaPreneur = rempli ? absScore : -absScore;
+        partie.setScoreGlobalA(partie.getScoreGlobalA() + deltaPreneur);
+        partie.setScoreGlobalB(partie.getScoreGlobalB() - deltaPreneur);
 
         // Mettre à jour les scores globaux des utilisateurs
         for (Joueur j : joueurs) {
@@ -864,20 +886,17 @@ public class TarotService {
 
             if (cinqJoueurs) {
                 if (estPreneur) {
-                    // En solo (roi non révélé) : preneur = 4B  ; en duo : 3B
                     int facteur = jeuSolo5j ? 4 : 3;
                     delta = rempli ? absScore * facteur : -absScore * facteur;
                 } else if (estPartenaire) {
                     delta = rempli ? absScore : -absScore;
                 } else {
-                    // Défenseur
                     delta = rempli ? -absScore : absScore;
                 }
             } else {
-                // 3j / 4j : répartition simple (existant)
                 int nbDefenseurs = partie.getNbJoueursRequis() - 1;
                 if (estPreneur) {
-                    delta = score; // signé : + si rempli, - si chuté
+                    delta = score;
                 } else {
                     delta = rempli ? -score / nbDefenseurs : absScore;
                 }
@@ -888,10 +907,27 @@ public class TarotService {
             utilisateurRepository.save(u);
         }
 
-        // Stocker les scores finaux dans la partie (en points ×2 pour l'affichage)
-        partie.setScoreA(pointsPreneurX2);  // preneur
-        partie.setScoreB(182 - pointsPreneurX2);  // défenseurs
-        partie.setStatut("TERMINEE");
+        // Stocker les scores de la donne
+        partie.setScoreA(pointsPreneurX2);
+        partie.setScoreB(182 - pointsPreneurX2);
+
+        // Vérifier la condition de fin de partie multi-manche
+        boolean partieTerminee = false;
+        if (partie.getMaxDonnes() > 0 && partie.getDonneActuelle() >= partie.getMaxDonnes()) {
+            partieTerminee = true;
+        } else if (partie.getMaxPoints() == 0 && partie.getMaxDonnes() == 0) {
+            // Comportement legacy : 1 seule donne
+            partieTerminee = true;
+        }
+        // Pour maxPoints en Tarot : le scoreGlobal est la somme des deltas (peut être négatif)
+        // On utilise simplement le nombre de donnes comme condition principale
+
+        if (partieTerminee) {
+            partie.setStatut("TERMINEE");
+        } else {
+            partie.setDonneActuelle(partie.getDonneActuelle() + 1);
+            redemarrerDonneTarot(partie, joueurs);
+        }
     }
 
     /**
@@ -1089,5 +1125,123 @@ public class TarotService {
         r.setGagnantEquipe(score > 0 ? 1 : 2);
 
         return r;
+    }
+
+    // =========================================================
+    // POIGNÉE
+    // =========================================================
+
+    /**
+     * Le preneur déclare une Poignée avant de jouer sa première carte.
+     * "SIMPLE"|"DOUBLE"|"TRIPLE"
+     */
+    public EtatJeuTarotDTO declarePoignee(Long partieId, Long utilisateurId, String typePoignee) {
+        Partie partie = partieRepository.findById(partieId)
+                .orElseThrow(() -> new fr.enseeiht.jeux.exception.ResourceNotFoundException("Partie introuvable."));
+
+        if (!"EN_JEU".equals(partie.getStatut()) || !"JEU".equals(partie.getPhaseJeu())) {
+            throw new fr.enseeiht.jeux.exception.BusinessException("Poignée déclarable uniquement au début de la phase de jeu.");
+        }
+        if (partie.getNumPliCourant() > 1) {
+            throw new fr.enseeiht.jeux.exception.BusinessException("Poignée déclarable avant le premier pli uniquement.");
+        }
+
+        List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
+        Joueur preneur = joueurs.stream()
+                .filter(j -> j.getId().equals(partie.getPreneurId()))
+                .findFirst()
+                .orElseThrow(() -> new fr.enseeiht.jeux.exception.BusinessException("Preneur introuvable."));
+
+        if (!preneur.getUtilisateur().getId().equals(utilisateurId)) {
+            throw new fr.enseeiht.jeux.exception.BusinessException("Seul le preneur peut déclarer une Poignée.");
+        }
+
+        long nbAtouts = preneur.getCartesEnMain().stream()
+                .filter(c -> "Atout".equals(c.getCouleur()) && !"Excuse".equals(c.getValeur()))
+                .count();
+
+        int requis = scoringService.nbAtouttsPourPoignee(partie.getNbJoueursRequis(), typePoignee);
+        if (nbAtouts < requis) {
+            throw new fr.enseeiht.jeux.exception.BusinessException(
+                    "Poignée " + typePoignee + " requiert " + requis + " atouts, vous en avez " + nbAtouts + ".");
+        }
+
+        partie.setPoigneeDeclaree(typePoignee);
+        partieRepository.save(partie);
+
+        List<Joueur> joueursAct = joueurRepository.findByPartie_Id(partieId);
+        pushEtatTarotATous(partieId, joueursAct, EvenementJeuDTO.Type.CARTE_JOUEE);
+        return getEtatJeuTarot(partieId, utilisateurId);
+    }
+
+    // =========================================================
+    // REDÉMARRAGE D'UNE NOUVELLE DONNE
+    // =========================================================
+
+    /**
+     * Réinitialise la donne : vide mains/plis/enchères, redistribue 78 cartes.
+     * Conserve les scores globaux et le numéro de donne.
+     */
+    void redemarrerDonneTarot(Partie partie, List<Joueur> joueurs) {
+        Long partieId = partie.getId();
+        int nbJoueurs = partie.getNbJoueursRequis();
+
+        for (Joueur j : joueurs) {
+            j.getCartesEnMain().clear();
+            joueurRepository.save(j);
+        }
+
+        pliRepository.deleteAll(pliRepository.findByPartie_Id(partieId));
+        enchereRepository.deleteAll(enchereRepository.findByPartie_IdOrderByIdAsc(partieId));
+
+        // Générer 78 cartes Tarot
+        List<Carte> paquet = new ArrayList<>();
+        String[] valeursCouleur = {"1","2","3","4","5","6","7","8","9","10","Valet","Cavalier","Dame","Roi"};
+        String[] couleurs = {"Coeur","Carreau","Trefle","Pique"};
+        for (String couleur : couleurs) {
+            for (String val : valeursCouleur) {
+                Carte c = new Carte(); c.setValeur(val); c.setCouleur(couleur);
+                paquet.add(carteRepository.save(c));
+            }
+        }
+        for (int i = 1; i <= 21; i++) {
+            Carte c = new Carte(); c.setValeur(String.valueOf(i)); c.setCouleur("Atout");
+            paquet.add(carteRepository.save(c));
+        }
+        Carte excuse = new Carte(); excuse.setValeur("Excuse"); excuse.setCouleur("Atout");
+        paquet.add(carteRepository.save(excuse));
+        Collections.shuffle(paquet);
+
+        int tailleChien = (nbJoueurs == 5) ? 3 : 6;
+        int cartesParJoueur = (paquet.size() - tailleChien) / nbJoueurs;
+        joueurs.sort(Comparator.comparingInt(Joueur::getPosition));
+        for (int i = 0; i < nbJoueurs; i++) {
+            Joueur j = joueurs.get(i);
+            j.setCartesEnMain(new ArrayList<>(paquet.subList(i * cartesParJoueur, (i + 1) * cartesParJoueur)));
+            j.setEquipe(0);
+            joueurRepository.save(j);
+        }
+
+        partie.getChien().clear();
+        partie.getChien().addAll(paquet.subList(nbJoueurs * cartesParJoueur, paquet.size()));
+        partie.getEcartes().clear();
+
+        // Réinitialiser l'état de la donne
+        partie.setStatut("EN_ENCHERE");
+        partie.setPhaseJeu(null);
+        partie.setEnchereType(null);
+        partie.setMultiplicateur(1);
+        partie.setPreneurId(null);
+        partie.setPartenaireId(null);
+        partie.setAppelRoi(null);
+        partie.setPassesConsecutives(0);
+        partie.setNumPliCourant(0);
+        partie.setScoreA(0);
+        partie.setScoreB(0);
+        partie.setPoigneeDeclaree(null);
+        partie.setPetitAuBoutPreneur(false);
+        partie.setTourJoueurIndex(0);
+        // Ne PAS réinitialiser : donneActuelle, maxDonnes, maxPoints, scoreGlobalA/B
+        partieRepository.save(partie);
     }
 }

@@ -77,4 +77,14 @@ public class TarotController {
         String couleur = body.get("couleur");
         return ResponseEntity.ok(tarotService.appelerRoi(id, utilisateurId, couleur));
     }
+
+    /** POST déclarer une Poignée (SIMPLE=20pts, DOUBLE=30pts, TRIPLE=40pts) avant le 1er pli */
+    @PostMapping("/poignee")
+    public ResponseEntity<EtatJeuTarotDTO> declarePoignee(
+            @PathVariable Long id,
+            @RequestParam Long utilisateurId,
+            @RequestBody Map<String, String> body) {
+        String type = body.get("type");
+        return ResponseEntity.ok(tarotService.declarePoignee(id, utilisateurId, type));
+    }
 }

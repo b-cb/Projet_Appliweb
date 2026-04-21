@@ -5,12 +5,11 @@ echo "🚀 Lancement du projet Jeux de Cartes..."
 # --- Détection du système d'exploitation ---
 OS="$(uname -s)"
 
-# --- Ouverture des ports (Uniquement sur Linux) ---
+# --- Ouverture des ports (Uniquement sur Linux, non bloquant) ---
 if [ "$OS" = "Linux" ]; then
-    echo "🔓 [Linux] Ouverture des ports 5173 et 8080 dans ufw..."
-    sudo ufw allow 5173/tcp > /dev/null
-    sudo ufw allow 8080/tcp > /dev/null
-    echo "✅ Ports ouverts !"
+    # Ouvre les ports si sudo est disponible sans bloquer, sinon on continue quand même
+    sudo -n ufw allow 5173/tcp > /dev/null 2>&1 || true
+    sudo -n ufw allow 8080/tcp > /dev/null 2>&1 || true
 elif [ "$OS" = "Darwin" ]; then
     echo "🍏 [macOS] Le pare-feu affichera un pop-up si une autorisation est requise."
 fi
@@ -33,6 +32,10 @@ cd ..
 # 2. Lancement du frontend (React/Vite)
 echo "⚛️ Démarrage du Front-end (React)..."
 cd frontend-cartes
+if [ ! -d "node_modules" ]; then
+    echo "📦 Installation des dépendances npm (premier lancement)..."
+    npm install
+fi
 npm run dev -- --host &
 FRONTEND_PID=$!
 cd ..

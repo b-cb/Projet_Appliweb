@@ -161,9 +161,29 @@ function CoinchePage() {
           )}
         </div>
         <div className="header-center">
-          <span className="score-badge">Éq.1 : {etatJeu.scoreA} pts</span>
+          {etatJeu.maxDonnes > 0 && (
+            <span className="atout-badge">Manche {etatJeu.donneActuelle}/{etatJeu.maxDonnes}</span>
+          )}
+          {etatJeu.maxPoints > 0 && (
+            <span className="atout-badge">Objectif : {etatJeu.maxPoints} pts</span>
+          )}
+          {/* Score donne en cours */}
+          <span className="score-badge" title="Points de la donne en cours">
+            Éq.1 : {etatJeu.scoreA} pts
+          </span>
           <span className="score-sep">|</span>
-          <span className="score-badge">Éq.2 : {etatJeu.scoreB} pts</span>
+          <span className="score-badge" title="Points de la donne en cours">
+            Éq.2 : {etatJeu.scoreB} pts
+          </span>
+          {/* Total multi-donnes */}
+          {(etatJeu.maxDonnes > 0 || etatJeu.maxPoints > 0) && (
+            <>
+              <span className="score-sep" style={{ margin: '0 4px' }}>·</span>
+              <span className="score-badge" style={{ opacity: 0.75, fontSize: '0.8rem' }}>
+                Total : {etatJeu.scoreGlobalA}/{etatJeu.scoreGlobalB}
+              </span>
+            </>
+          )}
         </div>
         <div className="user-info">
           <span className="user-badge">{utilisateur?.pseudo} · Équipe {etatJeu.monEquipe}</span>
@@ -197,19 +217,23 @@ function CoinchePage() {
           {etatJeu.statut === 'TERMINEE' && etatJeu.resultat && (
             <div className="resultat-overlay">
               <div className="resultat-centre">
-                <h3>Partie terminée</h3>
+                <h3>Partie terminée !</h3>
                 <p>
                   Contrat {etatJeu.resultat.contratValeur} {SYMBOLES[etatJeu.resultat.contratCouleur]}
                   {' '}par {etatJeu.resultat.pseudoPreneur}
                 </p>
                 <p>Contrat {etatJeu.resultat.contratRempli ? '✓ rempli' : '✗ chuté'}</p>
-                <p>
-                  <strong>Vainqueur : Équipe {etatJeu.resultat.gagnantEquipe}</strong>
-                </p>
-                <p>Éq.1 {etatJeu.scoreA} pts — Éq.2 {etatJeu.scoreB} pts</p>
+                <p><strong>Vainqueur final : Équipe {etatJeu.resultat.gagnantEquipe}</strong></p>
+                <p>Éq.1 {etatJeu.scoreGlobalA} pts — Éq.2 {etatJeu.scoreGlobalB} pts (total)</p>
                 <button className="btn-primary" onClick={retourLobby}>Retour au lobby</button>
               </div>
             </div>
+          )}
+
+          {/* Transition entre deux donnes */}
+          {etatJeu.statut === 'EN_ENCHERE' && etatJeu.donneActuelle > 1 && etatJeu.scoreGlobalA === 0 && etatJeu.scoreGlobalB === 0 && null}
+          {etatJeu.statut === 'EN_ENCHERE' && etatJeu.donneActuelle > 1 && (etatJeu.scoreGlobalA > 0 || etatJeu.scoreGlobalB > 0) && (
+            <div className="resultat-overlay" style={{ pointerEvents: 'none', opacity: 0 }} />
           )}
 
           {/* Ma main */}

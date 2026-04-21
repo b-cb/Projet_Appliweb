@@ -165,6 +165,12 @@ export default function TarotGamePage() {
     await api.envoyerMessage(token, partieId, utilisateur.id, contenu)
   }
 
+  const handleDeclarePoignee = async (type) => {
+    const { ok, data } = await api.declarePoigneeTarot(token, partieId, utilisateur.id, type)
+    if (ok) setEtatJeu(data)
+    else afficherFlash(data?.erreur || 'Impossible de déclarer la Poignée.')
+  }
+
   const retourLobby = () => { deconnecter(); navigate('/lobby') }
   const deconnexion = () => { deconnecter(); logout(); navigate('/') }
 
@@ -213,6 +219,9 @@ export default function TarotGamePage() {
           )}
         </div>
         <div className="header-center">
+          {etatJeu.maxDonnes > 0 && (
+            <span className="atout-badge">Manche {etatJeu.donneActuelle}/{etatJeu.maxDonnes}</span>
+          )}
           {statut === 'EN_JEU' && (
             <>
               <span className="score-badge">
@@ -309,11 +318,35 @@ export default function TarotGamePage() {
             <ChienPanel etatJeu={etatJeu} onEcarter={handleEcarter} />
           )}
 
+          {/* Overlay : Poignée (preneur peut déclarer avant le 1er pli) */}
+          {statut === 'EN_JEU' && etatJeu.numPliCourant <= 1 && etatJeu.estPreneur && !etatJeu.poigneeDeclaree && (
+            <div style={{
+              position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
+              background: 'rgba(0,0,0,0.7)', borderRadius: 10, padding: '8px 14px',
+              display: 'flex', gap: 8, alignItems: 'center', zIndex: 10, flexWrap: 'wrap'
+            }}>
+              <span style={{ color: '#ccc', fontSize: '0.85rem' }}>Poignée ?</span>
+              {['SIMPLE', 'DOUBLE', 'TRIPLE'].map(t => (
+                <button key={t} className="btn-small btn-invite"
+                  onClick={() => handleDeclarePoignee(t)}
+                  title={t === 'SIMPLE' ? '+20 pts' : t === 'DOUBLE' ? '+30 pts' : '+40 pts'}>
+                  {t === 'SIMPLE' ? 'Simple (+20)' : t === 'DOUBLE' ? 'Double (+30)' : 'Triple (+40)'}
+                </button>
+              ))}
+            </div>
+          )}
+          {etatJeu.poigneeDeclaree && statut === 'EN_JEU' && (
+            <div style={{ position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
+              background: 'rgba(180,120,0,0.8)', borderRadius: 8, padding: '4px 12px', zIndex: 10 }}>
+              Poignée {etatJeu.poigneeDeclaree} déclarée ! ({etatJeu.poigneeDeclaree === 'SIMPLE' ? '20' : etatJeu.poigneeDeclaree === 'DOUBLE' ? '30' : '40'} pts bonus)
+            </div>
+          )}
+
           {/* Overlay : résultat */}
           {statut === 'TERMINEE' && etatJeu.resultat && (
             <div className="resultat-overlay">
               <div className="resultat-centre">
-                <h3>Partie Tarot terminée</h3>
+                <h3>Partie Tarot terminée !</h3>
                 <p>
                   <strong>{etatJeu.resultat.pseudoPreneur}</strong> joue en{' '}
                   {BID_LABELS[etatJeu.resultat.enchereType]} ×{etatJeu.resultat.multiplicateur}
@@ -325,10 +358,15 @@ export default function TarotGamePage() {
                   Points : {(etatJeu.resultat.pointsPreneurX2 / 2).toFixed(1)} / {etatJeu.resultat.seuil}
                   {' '}({etatJeu.resultat.boutsPreneur} bout{etatJeu.resultat.boutsPreneur !== 1 ? 's' : ''})
                 </p>
-                {etatJeu.resultat.petitAuBout && <p>Petit au bout !</p>}
+                {etatJeu.resultat.petitAuBout && <p>✨ Petit au bout ! (+{etatJeu.resultat.multiplicateur * 10} pts)</p>}
                 <p>Contrat {etatJeu.resultat.contratRempli ? '✓ rempli' : '✗ chuté'}</p>
                 <p>Score : {etatJeu.resultat.contratRempli ? '+' : '−'}{etatJeu.resultat.scorePartie} pts</p>
                 <p><strong>Vainqueur : Équipe {etatJeu.resultat.gagnantEquipe}</strong></p>
+                {etatJeu.maxDonnes > 0 && (
+                  <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                    Donnes : {etatJeu.donneActuelle}/{etatJeu.maxDonnes}
+                  </p>
+                )}
                 <button className="btn-primary" onClick={retourLobby}>Retour au lobby</button>
               </div>
             </div>

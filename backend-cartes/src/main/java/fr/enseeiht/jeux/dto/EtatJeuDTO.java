@@ -39,6 +39,13 @@ public class EtatJeuDTO {
     // Résultat (si TERMINEE)
     private ResultatDTO resultat;
 
+    // Multi-manche
+    private int donneActuelle;
+    private int maxDonnes;
+    private int maxPoints;
+    private int scoreGlobalA;
+    private int scoreGlobalB;
+
     public EtatJeuDTO() {}
 
     // --- Getters / Setters ---
@@ -96,6 +103,21 @@ public class EtatJeuDTO {
 
     public ResultatDTO getResultat() { return resultat; }
     public void setResultat(ResultatDTO resultat) { this.resultat = resultat; }
+
+    public int getDonneActuelle() { return donneActuelle; }
+    public void setDonneActuelle(int donneActuelle) { this.donneActuelle = donneActuelle; }
+
+    public int getMaxDonnes() { return maxDonnes; }
+    public void setMaxDonnes(int maxDonnes) { this.maxDonnes = maxDonnes; }
+
+    public int getMaxPoints() { return maxPoints; }
+    public void setMaxPoints(int maxPoints) { this.maxPoints = maxPoints; }
+
+    public int getScoreGlobalA() { return scoreGlobalA; }
+    public void setScoreGlobalA(int scoreGlobalA) { this.scoreGlobalA = scoreGlobalA; }
+
+    public int getScoreGlobalB() { return scoreGlobalB; }
+    public void setScoreGlobalB(int scoreGlobalB) { this.scoreGlobalB = scoreGlobalB; }
 
     // --- Inner DTO : une carte dans le pli courant + qui l'a jouée ---
     public static class CartePliDTO {

@@ -43,14 +43,23 @@ public class PartieService {
     }
 
     public Partie creerPartie() {
-        return creerPartie("COINCHE", 4);
+        return creerPartie("COINCHE", 4, 0, 0);
     }
 
     public Partie creerPartie(String typeJeu, int nbJoueurs) {
+        return creerPartie(typeJeu, nbJoueurs, 0, 0);
+    }
+
+    public Partie creerPartie(String typeJeu, int nbJoueurs, int maxDonnes, int maxPoints) {
         Partie partie = new Partie();
         partie.setStatut("OUVERTE");
         partie.setScoreA(0);
         partie.setScoreB(0);
+        partie.setScoreGlobalA(0);
+        partie.setScoreGlobalB(0);
+        partie.setDonneActuelle(1);
+        partie.setMaxDonnes(maxDonnes);
+        partie.setMaxPoints(maxPoints);
         partie.setTypeJeu(typeJeu != null ? typeJeu : "COINCHE");
         partie.setNbJoueursRequis(nbJoueurs > 0 ? nbJoueurs : 4);
         return partieRepository.save(partie);
@@ -61,26 +70,22 @@ public class PartieService {
      * puis déclenche le jeu automatique si le premier joueur est un bot.
      */
     public Partie creerEtDemarrerAvecBots(Long utilisateurId) {
-        // 1. Créer la partie (coinche 4 joueurs)
-        Partie partie = creerPartie();
+        return creerEtDemarrerAvecBots(utilisateurId, 0, 0);
+    }
+
+    public Partie creerEtDemarrerAvecBots(Long utilisateurId, int maxDonnes, int maxPoints) {
+        Partie partie = creerPartie("COINCHE", 4, maxDonnes, maxPoints);
         Long partieId = partie.getId();
 
-        // 2. Le joueur humain rejoint en position 0
         rejoindrePartie(partieId, utilisateurId);
 
-        // 3. Les 3 bots rejoignent dans l'ordre
         for (String botPseudo : BotInitializer.BOT_PSEUDOS) {
             Utilisateur bot = utilisateurRepository.findByPseudo(botPseudo)
                     .orElseThrow(() -> new ResourceNotFoundException("Bot " + botPseudo + " introuvable."));
             rejoindrePartie(partieId, bot.getId());
         }
 
-        // 4. Démarrer la partie (distribue les cartes, passe EN_ENCHERE)
-        Partie demarree = demarrerPartie(partieId);
-
-        // 5. Si le joueur en position 0 est humain, pas besoin de déclencher les bots
-        // Le bot ne jouera qu'après que l'humain ait agi — déclenché dans JeuService
-        return demarree;
+        return demarrerPartie(partieId);
     }
 
     public List<Partie> listerParties() {
@@ -177,6 +182,8 @@ public class PartieService {
         partie.setTourJoueurIndex(0);
         partie.setPassesConsecutives(0);
         partie.setNumPliCourant(0);
+        partie.setScoreA(0);
+        partie.setScoreB(0);
         partieRepository.save(partie);
 
         // Push WebSocket personnalisé par joueur
@@ -238,8 +245,12 @@ public class PartieService {
      * - Tarot 5j : 1 humain + 4 bots (Bot_1, Bot_2, Bot_3, Bot_4)
      */
     public Partie creerEtDemarrerTarotAvecBots(Long utilisateurId, int nbJoueurs) {
+        return creerEtDemarrerTarotAvecBots(utilisateurId, nbJoueurs, 0, 0);
+    }
+
+    public Partie creerEtDemarrerTarotAvecBots(Long utilisateurId, int nbJoueurs, int maxDonnes, int maxPoints) {
         int nbBots = nbJoueurs - 1;
-        Partie partie = creerPartie("TAROT", nbJoueurs);
+        Partie partie = creerPartie("TAROT", nbJoueurs, maxDonnes, maxPoints);
         Long partieId = partie.getId();
 
         rejoindrePartie(partieId, utilisateurId);
@@ -325,5 +336,73 @@ public class PartieService {
         }
 
         return partie;
+    }
+
+    /**
+     * Redémarre une nouvelle donne Coinche : vide les mains, plis et enchères de la donne précédente
+     * puis redistribue 32 cartes. Les joueurs et scores globaux sont conservés.
+     */
+    @org.springframework.transaction.annotation.Transactional
+    public void redemarrerDonneCoinche(Partie partie,
+                                       List<Joueur> joueurs,
+                                       fr.enseeiht.jeux.repository.CarteRepository carteRepository,
+                                       fr.enseeiht.jeux.repository.EnchereRepository enchereRepository,
+                                       fr.enseeiht.jeux.repository.PliRepository pliRepository) {
+        Long partieId = partie.getId();
+
+        // Vider les mains des joueurs
+        for (Joueur j : joueurs) {
+            j.getCartesEnMain().clear();
+            joueurRepository.save(j);
+        }
+
+        // Supprimer les plis et enchères de la donne précédente
+        pliRepository.deleteAll(pliRepository.findByPartie_Id(partieId));
+        enchereRepository.deleteAll(enchereRepository.findByPartie_IdOrderByIdAsc(partieId));
+
+        // Créer et distribuer un nouveau jeu de 32 cartes
+        String[] valeurs = {"7", "8", "9", "10", "Valet", "Dame", "Roi", "As"};
+        String[] couleurs = {"Coeur", "Carreau", "Trefle", "Pique"};
+        List<Carte> paquet = new ArrayList<>();
+        for (String couleur : couleurs) {
+            for (String valeur : valeurs) {
+                Carte carte = new Carte();
+                carte.setValeur(valeur);
+                carte.setCouleur(couleur);
+                paquet.add(carteRepository.save(carte));
+            }
+        }
+        Collections.shuffle(paquet);
+
+        List<Joueur> joueursOrdre = joueurRepository.findByPartie_Id(partieId);
+        joueursOrdre.sort(Comparator.comparingInt(Joueur::getPosition));
+        for (int i = 0; i < joueursOrdre.size(); i++) {
+            Joueur j = joueursOrdre.get(i);
+            j.setCartesEnMain(new ArrayList<>(paquet.subList(i * 8, (i + 1) * 8)));
+            joueurRepository.save(j);
+        }
+
+        // Réinitialiser l'état de la donne (pas les scores globaux)
+        partie.setStatut("EN_ENCHERE");
+        partie.setAtout(null);
+        partie.setContratValeur(0);
+        partie.setContratCouleur(null);
+        partie.setPreneurId(null);
+        partie.setPassesConsecutives(0);
+        partie.setNumPliCourant(0);
+        partie.setScoreA(0);
+        partie.setScoreB(0);
+        partie.setTourJoueurIndex(0);
+        partieRepository.save(partie);
+
+        // Push WebSocket : tous les joueurs reçoivent le nouvel état
+        List<Joueur> joueursActualisesPost = joueurRepository.findByPartie_Id(partieId);
+        for (Joueur j : joueursActualisesPost) {
+            EtatJeuDTO etat = jeuService.getEtatJeu(partieId, j.getUtilisateur().getId());
+            messagingTemplate.convertAndSend(
+                    "/topic/partie/" + partieId + "/joueur/" + j.getUtilisateur().getId(),
+                    EvenementJeuDTO.of(EvenementJeuDTO.Type.ENCHERE, etat)
+            );
+        }
     }
 }

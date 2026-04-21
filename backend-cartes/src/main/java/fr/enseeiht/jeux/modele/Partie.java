@@ -29,6 +29,13 @@ public class Partie {
     private int passesConsecutives;    // compteur de passes (reset à 0 quand une enchère est faite)
     private int numPliCourant;         // 1-N : numéro du pli en cours
 
+    // Multi-manche
+    private int maxDonnes;     // 0 = pas de limite (condition par score), N = nombre de donnes à jouer
+    private int maxPoints;     // 0 = pas de limite (condition par donnes), N = score à atteindre pour gagner
+    private int donneActuelle; // numéro de la donne courante (commence à 1)
+    private int scoreGlobalA;  // score cumulé de l'équipe A sur toutes les donnes
+    private int scoreGlobalB;  // score cumulé de l'équipe B sur toutes les donnes
+
     // Tarot : sous-phase de jeu (null pour Coinche)
     // null = enchères, "CHIEN" = phase chien/écart, "JEU" = tricks en cours
     private String phaseJeu;
@@ -55,6 +62,10 @@ public class Partie {
 
     // Tarot : suivi du Petit au bout
     private boolean petitAuBoutPreneur;
+
+    // Tarot : Poignée déclarée par le preneur avant le premier pli
+    // null = aucune, "SIMPLE" = 20 pts, "DOUBLE" = 30 pts, "TRIPLE" = 40 pts
+    private String poigneeDeclaree;
 
     // Tarot 5 joueurs : couleur du Roi appelé par le preneur ("Coeur"|"Carreau"|"Trefle"|"Pique")
     private String appelRoi;
@@ -233,5 +244,23 @@ public class Partie {
 
     public Long getPartenaireId() { return partenaireId; }
     public void setPartenaireId(Long partenaireId) { this.partenaireId = partenaireId; }
+
+    public String getPoigneeDeclaree() { return poigneeDeclaree; }
+    public void setPoigneeDeclaree(String poigneeDeclaree) { this.poigneeDeclaree = poigneeDeclaree; }
+
+    public int getMaxDonnes() { return maxDonnes; }
+    public void setMaxDonnes(int maxDonnes) { this.maxDonnes = maxDonnes; }
+
+    public int getMaxPoints() { return maxPoints; }
+    public void setMaxPoints(int maxPoints) { this.maxPoints = maxPoints; }
+
+    public int getDonneActuelle() { return donneActuelle; }
+    public void setDonneActuelle(int donneActuelle) { this.donneActuelle = donneActuelle; }
+
+    public int getScoreGlobalA() { return scoreGlobalA; }
+    public void setScoreGlobalA(int scoreGlobalA) { this.scoreGlobalA = scoreGlobalA; }
+
+    public int getScoreGlobalB() { return scoreGlobalB; }
+    public void setScoreGlobalB(int scoreGlobalB) { this.scoreGlobalB = scoreGlobalB; }
 
 }

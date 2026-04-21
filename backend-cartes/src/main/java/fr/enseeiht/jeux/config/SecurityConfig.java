@@ -42,12 +42,16 @@ public class SecurityConfig {
                 })
             )
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/**").permitAll()
+                // Console H2 — libre d'accès pour le dev
                 .requestMatchers("/h2-console/**").permitAll()
+                .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/ws/**").permitAll()
                 .anyRequest().authenticated()
             )
-            .headers(headers -> headers.frameOptions(fo -> fo.sameOrigin()))
+            // Autoriser les iframes de la console H2 (même origine)
+            .headers(headers -> headers
+                .frameOptions(fo -> fo.sameOrigin())
+            )
             .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
@@ -56,8 +60,8 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173", "http://127.0.0.1:5173"));
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        config.setAllowedOriginPatterns(List.of("*")); // LAN + localhost
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setAllowCredentials(true);
 

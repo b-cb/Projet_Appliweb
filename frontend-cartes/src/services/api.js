@@ -38,21 +38,21 @@ export async function fetchPartie(token, partieId) {
 }
 
 export async function creerPartie(token, options = {}) {
-  const { typeJeu = 'COINCHE', nbJoueurs = 4 } = options
+  const { typeJeu = 'COINCHE', nbJoueurs = 4, maxDonnes = 0, maxPoints = 0 } = options
   const res = await fetch(`${BASE}/partie/creer`, {
     method: 'POST',
     headers: headers(token),
-    body: JSON.stringify({ typeJeu, nbJoueurs })
+    body: JSON.stringify({ typeJeu, nbJoueurs, maxDonnes, maxPoints })
   })
   return { ok: res.ok, data: await res.json() }
 }
 
 export async function creerPartieAvecBots(token, utilisateurId, options = {}) {
-  const { typeJeu = 'COINCHE', nbJoueurs = 4 } = options
+  const { typeJeu = 'COINCHE', nbJoueurs = 4, maxDonnes = 0, maxPoints = 0 } = options
   const res = await fetch(`${BASE}/partie/creer?avecBots=true&utilisateurId=${utilisateurId}`, {
     method: 'POST',
     headers: headers(token),
-    body: JSON.stringify({ typeJeu, nbJoueurs })
+    body: JSON.stringify({ typeJeu, nbJoueurs, maxDonnes, maxPoints })
   })
   return { ok: res.ok, data: await res.json() }
 }
@@ -180,6 +180,13 @@ export async function jouerCarteTarot(token, partieId, utilisateurId, carteId) {
 export async function appelerRoiTarot(token, partieId, utilisateurId, couleur) {
   const res = await fetch(`${BASE}/partie/${partieId}/tarot/appeler-roi?utilisateurId=${utilisateurId}`, {
     method: 'POST', headers: headers(token), body: JSON.stringify({ couleur })
+  })
+  return { ok: res.ok, data: await res.json().catch(() => null) }
+}
+
+export async function declarePoigneeTarot(token, partieId, utilisateurId, type) {
+  const res = await fetch(`${BASE}/partie/${partieId}/tarot/poignee?utilisateurId=${utilisateurId}`, {
+    method: 'POST', headers: headers(token), body: JSON.stringify({ type })
   })
   return { ok: res.ok, data: await res.json().catch(() => null) }
 }

@@ -19,6 +19,10 @@ export default function LobbyPage() {
   const [modeJeu, setModeJeu] = useState('COINCHE')   // COINCHE | TAROT
   const [nbJoueursMode, setNbJoueursMode] = useState(4)
   const [avecBots, setAvecBots] = useState(false)
+  // Condition de fin de partie
+  const [modeCondition, setModeCondition] = useState('donnes')  // 'donnes' | 'points'
+  const [maxDonnes, setMaxDonnes] = useState(5)
+  const [maxPoints, setMaxPoints] = useState(1000)
 
   const afficherFlash = (msg) => { setFlash(msg); setTimeout(() => setFlash(''), 3000) }
 
@@ -55,10 +59,12 @@ export default function LobbyPage() {
   }
 
   const creerPartie = async () => {
+    const conditionBody = modeCondition === 'donnes'
+      ? { maxDonnes, maxPoints: 0 }
+      : { maxDonnes: 0, maxPoints }
     if (avecBots) {
-      // Création avec bots : démarre directement (coinche ou tarot)
       const { ok, data } = await api.creerPartieAvecBots(token, utilisateur.id, {
-        typeJeu: modeJeu, nbJoueurs: nbJoueursMode
+        typeJeu: modeJeu, nbJoueurs: nbJoueursMode, ...conditionBody
       })
       if (ok) {
         afficherFlash(`Partie #${data.id} avec bots créée !`)
@@ -68,8 +74,7 @@ export default function LobbyPage() {
         afficherFlash(data?.erreur || 'Erreur lors de la création avec bots.')
       }
     } else {
-      // Création standard avec options (mode + nb joueurs)
-      const { ok, data } = await api.creerPartie(token, { typeJeu: modeJeu, nbJoueurs: nbJoueursMode })
+      const { ok, data } = await api.creerPartie(token, { typeJeu: modeJeu, nbJoueurs: nbJoueursMode, ...conditionBody })
       if (ok) {
         afficherFlash(`Partie #${data.id} créée !`)
         await api.rejoindrePartie(token, data.id, utilisateur.id)
@@ -194,6 +199,36 @@ export default function LobbyPage() {
               </label>
             </div>
 
+            <div className="create-panel-row">
+              <label className="create-label">Condition de fin</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  value={modeCondition}
+                  onChange={e => setModeCondition(e.target.value)}
+                  style={{ padding: '4px 8px', borderRadius: 6 }}
+                >
+                  <option value="donnes">Nombre de donnes</option>
+                  <option value="points">Score maximum</option>
+                </select>
+                {modeCondition === 'donnes' ? (
+                  <input
+                    type="number" min={1} max={20} value={maxDonnes}
+                    onChange={e => setMaxDonnes(parseInt(e.target.value) || 1)}
+                    style={{ width: 60, padding: '4px 6px', borderRadius: 6 }}
+                  />
+                ) : (
+                  <input
+                    type="number" min={100} max={5000} step={100} value={maxPoints}
+                    onChange={e => setMaxPoints(parseInt(e.target.value) || 500)}
+                    style={{ width: 80, padding: '4px 6px', borderRadius: 6 }}
+                  />
+                )}
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                  {modeCondition === 'donnes' ? `donne${maxDonnes > 1 ? 's' : ''}` : 'pts'}
+                </span>
+              </div>
+            </div>
+
             <button className="btn-primary create-btn-main" onClick={creerPartie}>
               + Créer la partie
             </button>
@@ -249,7 +284,7 @@ export default function LobbyPage() {
               <h2>Partie #{partieSelectionnee.id}</h2>
               <p>Statut : <strong>{partieSelectionnee.statut}</strong></p>
 
-              <h3>Joueurs ({joueurs.length}/4)</h3>
+              <h3>Joueurs ({joueurs.length}/{partieSelectionnee.nbJoueursRequis ?? 4})</h3>
               <div className="equipes-grid">
                 <div className="equipe-col">
                   <div className="equipe-label eq1">Équipe 1</div>
@@ -270,7 +305,7 @@ export default function LobbyPage() {
               </div>
 
               <div className="party-actions">
-                {partieSelectionnee.statut === 'OUVERTE' && joueurs.length === 4 && (
+                {partieSelectionnee.statut === 'OUVERTE' && joueurs.length === (partieSelectionnee.nbJoueursRequis ?? 4) && (
                   <button className="btn-primary btn-start" onClick={() => demarrer(partieSelectionnee.id)}>
                     Démarrer la partie
                   </button>

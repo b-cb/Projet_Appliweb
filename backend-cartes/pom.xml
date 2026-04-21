@@ -73,7 +73,7 @@
 		<dependency>
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
-			<scope>runtime</scope>
+			<!-- pas de scope runtime : WebServlet doit être disponible à la compilation -->
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

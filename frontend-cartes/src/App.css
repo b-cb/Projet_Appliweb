@@ -355,6 +355,17 @@ body {
 .equipe-label.eq1 { color: var(--eq1); }
 .equipe-label.eq2 { color: var(--eq2); }
 
+.player-list-lobby {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 16px;
+}
+
 .player-item {
   display: flex;
   align-items: center;
@@ -363,8 +374,35 @@ body {
   color: var(--text-h);
   font-weight: 500;
   font-size: 0.95rem;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
 }
+.player-item:last-child { border-bottom: none; }
 .player-sym { font-size: 1rem; }
+
+.player-bot { color: var(--text-muted); }
+.bot-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 400; }
+.player-vide { opacity: 0.4; font-style: italic; }
+
+.bots-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--text);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  user-select: none;
+}
+.bots-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.bots-toggle:hover { border-color: var(--accent); }
 
 /* ===== PARTY ACTIONS ===== */
 .party-actions { display: flex; flex-direction: column; gap: 12px; }

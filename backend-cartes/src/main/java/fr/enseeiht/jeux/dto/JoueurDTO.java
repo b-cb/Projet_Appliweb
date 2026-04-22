@@ -9,25 +9,29 @@ public class JoueurDTO {
     private int position;
     private String pseudo;
     private Long utilisateurId;
+    private boolean bot;
 
     public JoueurDTO() {
     }
 
-    public JoueurDTO(Long id, int equipe, int position, String pseudo, Long utilisateurId) {
+    public JoueurDTO(Long id, int equipe, int position, String pseudo, Long utilisateurId, boolean bot) {
         this.id = id;
         this.equipe = equipe;
         this.position = position;
         this.pseudo = pseudo;
         this.utilisateurId = utilisateurId;
+        this.bot = bot;
     }
 
     public static JoueurDTO fromEntity(Joueur j) {
+        boolean isBot = j.getUtilisateur() != null && j.getUtilisateur().isBot();
         return new JoueurDTO(
                 j.getId(),
                 j.getEquipe(),
                 j.getPosition(),
                 j.getUtilisateur() != null ? j.getUtilisateur().getPseudo() : null,
-                j.getUtilisateur() != null ? j.getUtilisateur().getId() : null
+                j.getUtilisateur() != null ? j.getUtilisateur().getId() : null,
+                isBot
         );
     }
 
@@ -69,5 +73,13 @@ public class JoueurDTO {
 
     public void setUtilisateurId(Long utilisateurId) {
         this.utilisateurId = utilisateurId;
+    }
+
+    public boolean isBot() {
+        return bot;
+    }
+
+    public void setBot(boolean bot) {
+        this.bot = bot;
     }
 }

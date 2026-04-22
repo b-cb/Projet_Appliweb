@@ -380,7 +380,7 @@ public class JeuService {
                 });
 
         // Vérifier les règles de suivi de couleur
-        verifierReglesCouleur(joueurActif, carteJouee, pli, partie.getAtout());
+        verifierReglesCouleur(joueurActif, carteJouee, pli, partie.getAtout(), joueurs);
 
         // Jouer la carte
         pli.getCartesJouees().add(carteJouee);
@@ -428,8 +428,9 @@ public class JeuService {
     /**
      * Vérifie les règles de suivi (couleur demandée, obligation de couper, de monter).
      * Gère les trois modes : coinche normale, Sans-atout, Tout-atout.
+     * joueurs : liste complète des 4 joueurs de la partie (pour la règle "partenaire maître").
      */
-    private void verifierReglesCouleur(Joueur joueur, Carte carteJouee, Pli pli, String atout) {
+    private void verifierReglesCouleur(Joueur joueur, Carte carteJouee, Pli pli, String atout, List<Joueur> joueurs) {
         if (pli.getCartesJouees().isEmpty()) return; // premier à jouer dans ce pli, tout est permis
 
         Carte premiereCarteJouee = pli.getCartesJouees().get(0);
@@ -475,9 +476,11 @@ public class JeuService {
             if (possedeColoreDemandee) {
                 throw new BusinessException("Vous devez suivre la couleur demandée (" + couleurDemandee + ").");
             }
-            // N'a pas la couleur demandée → obligation de couper (sauf si c'est l'atout qui est demandé)
+            // N'a pas la couleur demandée → obligation de couper SAUF si le partenaire est maître du pli
             if (!couleurDemandee.equals(atout) && possedeAtout && !carteJouee.getCouleur().equals(atout)) {
-                throw new BusinessException("Vous devez couper avec un atout.");
+                if (!partenaireMaitre(joueur, pli, joueurs, atout)) {
+                    throw new BusinessException("Vous devez couper avec un atout.");
+                }
             }
         }
 
@@ -496,6 +499,49 @@ public class JeuService {
                 }
             }
         }
+    }
+
+    /**
+     * Retourne true si le partenaire du joueur est actuellement la carte maîtresse du pli.
+     * Utilisé pour exempter l'obligation de couper en Coinche normale.
+     */
+    private boolean partenaireMaitre(Joueur joueur, Pli pli, List<Joueur> joueurs, String atout) {
+        List<Carte> cartesJouees = pli.getCartesJouees();
+        if (cartesJouees.isEmpty()) return false;
+
+        int ouvreur = pli.getJoueurOuvreurIndex();
+        String couleurOuverte = cartesJouees.get(0).getCouleur();
+
+        // Trouver le joueur maître (celui qui remporterait le pli si la main s'arrêtait là)
+        int indexMaitre = ouvreur;
+        Carte carteMaitre = cartesJouees.get(0);
+        boolean atoutPresent = carteMaitre.getCouleur().equals(atout);
+
+        for (int i = 1; i < cartesJouees.size(); i++) {
+            Carte c = cartesJouees.get(i);
+            int idx = (ouvreur + i) % 4;
+            if (c.getCouleur().equals(atout)) {
+                if (!atoutPresent || ORDRE_ATOUT.indexOf(c.getValeur()) > ORDRE_ATOUT.indexOf(carteMaitre.getValeur())) {
+                    atoutPresent = true;
+                    carteMaitre = c;
+                    indexMaitre = idx;
+                }
+            } else if (!atoutPresent && c.getCouleur().equals(couleurOuverte)) {
+                if (ORDRE_NORMAL.indexOf(c.getValeur()) > ORDRE_NORMAL.indexOf(carteMaitre.getValeur())) {
+                    carteMaitre = c;
+                    indexMaitre = idx;
+                }
+            }
+        }
+
+        final int maitreFinal = indexMaitre;
+        Joueur joueurMaitre = joueurs.stream()
+                .filter(j -> j.getPosition() == maitreFinal)
+                .findFirst().orElse(null);
+
+        // Le partenaire est maître si le joueur qui mène appartient à la même équipe
+        return joueurMaitre != null && joueurMaitre.getEquipe() == joueur.getEquipe()
+                && !joueurMaitre.getId().equals(joueur.getId());
     }
 
     /**

@@ -76,6 +76,20 @@ export async function demarrerPartie(token, partieId) {
   return { ok: res.ok, data: await res.json().catch(() => null) }
 }
 
+export async function remplirAvecBots(token, partieId, utilisateurId) {
+  const res = await fetch(`${BASE}/partie/${partieId}/remplir-bots?utilisateurId=${utilisateurId}`, {
+    method: 'POST', headers: headers(token)
+  })
+  return { ok: res.ok, data: await res.json().catch(() => null) }
+}
+
+export async function retirerBots(token, partieId, utilisateurId) {
+  const res = await fetch(`${BASE}/partie/${partieId}/retirer-bots?utilisateurId=${utilisateurId}`, {
+    method: 'DELETE', headers: headers(token)
+  })
+  return { ok: res.ok, data: await res.json().catch(() => null) }
+}
+
 export async function fetchJoueurs(token, partieId) {
   const res = await fetch(`${BASE}/partie/${partieId}/joueurs`, { headers: headers(token) })
   return res.ok ? res.json() : []

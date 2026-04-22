@@ -78,4 +78,20 @@ public class PartieController {
                 .map(JoueurDTO::fromEntity)
                 .toList();
     }
+
+    @PostMapping("/partie/{partieId}/remplir-bots")
+    public ResponseEntity<PartieDTO> remplirAvecBots(
+            @PathVariable Long partieId,
+            @RequestParam Long utilisateurId) {
+        return ResponseEntity.ok(PartieDTO.fromEntity(
+                partieService.remplirAvecBots(partieId, utilisateurId)));
+    }
+
+    @DeleteMapping("/partie/{partieId}/retirer-bots")
+    public ResponseEntity<PartieDTO> retirerBots(
+            @PathVariable Long partieId,
+            @RequestParam Long utilisateurId) {
+        return ResponseEntity.ok(PartieDTO.fromEntity(
+                partieService.retirerBots(partieId, utilisateurId)));
+    }
 }

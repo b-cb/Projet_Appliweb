@@ -11,6 +11,7 @@ import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 public class PartieService {
@@ -225,6 +226,75 @@ public class PartieService {
             throw new ResourceNotFoundException("Partie #" + partieId + " introuvable.");
         }
         return joueurRepository.findByPartie_Id(partieId);
+    }
+
+    /**
+     * Remplit les places libres d'une partie ouverte avec des bots.
+     * Les bots déjà présents ne sont pas ajoutés en double.
+     */
+    @org.springframework.transaction.annotation.Transactional
+    public Partie remplirAvecBots(Long partieId, Long utilisateurId) {
+        Partie partie = partieRepository.findById(partieId)
+                .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
+        if (!"OUVERTE".equals(partie.getStatut())) {
+            throw new BusinessException("La partie n'est plus ouverte.");
+        }
+
+        List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
+        int placesLibres = partie.getNbJoueursRequis() - joueurs.size();
+        if (placesLibres <= 0) return partie;
+
+        Set<Long> idsPresents = joueurs.stream()
+                .map(j -> j.getUtilisateur().getId())
+                .collect(Collectors.toSet());
+
+        int botIndex = 0;
+        int ajouts = 0;
+        while (ajouts < placesLibres && botIndex < BotInitializer.BOT_PSEUDOS.length) {
+            String botPseudo = BotInitializer.BOT_PSEUDOS[botIndex++];
+            Utilisateur bot = utilisateurRepository.findByPseudo(botPseudo).orElse(null);
+            if (bot != null && !idsPresents.contains(bot.getId())) {
+                rejoindrePartie(partieId, bot.getId());
+                idsPresents.add(bot.getId());
+                ajouts++;
+            }
+        }
+
+        return partieRepository.findById(partieId).orElseThrow();
+    }
+
+    /**
+     * Retire tous les bots d'une partie ouverte et réattribue les positions.
+     */
+    @org.springframework.transaction.annotation.Transactional
+    public Partie retirerBots(Long partieId, Long utilisateurId) {
+        Partie partie = partieRepository.findById(partieId)
+                .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
+        if (!"OUVERTE".equals(partie.getStatut())) {
+            throw new BusinessException("La partie n'est plus ouverte.");
+        }
+
+        List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
+        List<Joueur> bots = joueurs.stream()
+                .filter(j -> j.getUtilisateur() != null && j.getUtilisateur().isBot())
+                .collect(Collectors.toList());
+
+        for (Joueur bot : bots) {
+            bot.getCartesEnMain().clear();
+            joueurRepository.save(bot);
+        }
+        joueurRepository.deleteAll(bots);
+        joueurRepository.flush();
+
+        // Réattribuer positions consécutives aux joueurs restants
+        List<Joueur> restants = joueurRepository.findByPartie_Id(partieId);
+        restants.sort(Comparator.comparingInt(Joueur::getPosition));
+        for (int i = 0; i < restants.size(); i++) {
+            restants.get(i).setPosition(i);
+            joueurRepository.save(restants.get(i));
+        }
+
+        return partieRepository.findById(partieId).orElseThrow();
     }
 
     /**

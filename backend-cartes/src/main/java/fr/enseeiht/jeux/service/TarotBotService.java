@@ -1,15 +1,22 @@
 package fr.enseeiht.jeux.service;
 
-import fr.enseeiht.jeux.modele.*;
-import fr.enseeiht.jeux.repository.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import fr.enseeiht.jeux.modele.Carte;
+import fr.enseeiht.jeux.modele.Joueur;
+import fr.enseeiht.jeux.modele.Partie;
+import fr.enseeiht.jeux.repository.JoueurRepository;
+import fr.enseeiht.jeux.repository.PartieRepository;
 
 /**
  * Joue automatiquement les coups des bots en mode Tarot.
@@ -155,7 +162,7 @@ public class TarotBotService {
         for (Carte c : main) {
             try {
                 tarotService.jouerCarte(partieId, botUserId, c.getId());
-                log.info("Tarot {} : {} joue {} {}", partieId, botPseudo, c.getValeur(), c.getCouleur());
+                //log.info("Tarot {} : {} joue {} {}", partieId, botPseudo, c.getValeur(), c.getCouleur());
                 return;
             } catch (Exception e) {
                 log.debug("Tarot {} : {} {} rejetée — {}", partieId, c.getValeur(), c.getCouleur(), e.getMessage());

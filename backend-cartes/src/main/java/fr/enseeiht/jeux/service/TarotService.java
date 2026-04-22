@@ -49,6 +49,7 @@ public class TarotService {
     private final UtilisateurRepository utilisateurRepository;
     private final EnchereRepository enchereRepository;
     private final PliRepository pliRepository;
+    private final CarteRepository carteRepository;
     private final TarotScoringService scoringService;
     private final SimpMessagingTemplate messagingTemplate;
     private final TarotBotService tarotBotService;
@@ -58,6 +59,7 @@ public class TarotService {
                         UtilisateurRepository utilisateurRepository,
                         EnchereRepository enchereRepository,
                         PliRepository pliRepository,
+                        CarteRepository carteRepository,
                         TarotScoringService scoringService,
                         SimpMessagingTemplate messagingTemplate,
                         @Lazy TarotBotService tarotBotService) {
@@ -66,6 +68,7 @@ public class TarotService {
         this.utilisateurRepository = utilisateurRepository;
         this.enchereRepository = enchereRepository;
         this.pliRepository = pliRepository;
+        this.carteRepository = carteRepository;
         this.scoringService = scoringService;
         this.messagingTemplate = messagingTemplate;
         this.tarotBotService = tarotBotService;
@@ -254,9 +257,12 @@ public class TarotService {
 
             partie.setPassesConsecutives(partie.getPassesConsecutives() + 1);
 
-            // Si tous les joueurs ont passé sans contrat → annuler la donne
+            // Si tous les joueurs ont passé sans contrat → nouvelle donne automatique
             if (partie.getPassesConsecutives() >= nbJoueurs) {
-                throw new BusinessException("Tous les joueurs ont passé : la donne est annulée. Redémarrez la partie.");
+                partieRepository.save(partie);
+                redealerTarot(partieId, partie, joueurs);
+                pushEtatTarotATous(partieId, joueurRepository.findByPartie_Id(partieId), EvenementJeuDTO.Type.ENCHERE);
+                return getEtatJeuTarot(partieId, utilisateurId);
             }
 
             // Passer au joueur suivant
@@ -322,6 +328,72 @@ public class TarotService {
         });
 
         return getEtatJeuTarot(partieId, utilisateurId);
+    }
+
+    /**
+     * Tous les joueurs ont passé → redistribuer les cartes et recommencer les enchères.
+     * Les enchères existantes sont supprimées, les mains recrées, l'état réinitialisé.
+     */
+    private void redealerTarot(Long partieId, Partie partie, List<Joueur> joueurs) {
+        int nbJoueurs = partie.getNbJoueursRequis();
+        int tailleChien = (nbJoueurs == 5) ? 3 : 6;
+
+        // 1. Vider les mains et réinitialiser les équipes
+        for (Joueur j : joueurs) {
+            j.getCartesEnMain().clear();
+            j.setEquipe(0);
+            joueurRepository.save(j);
+        }
+
+        // 2. Vider chien et écartes
+        partie.getChien().clear();
+        partie.getEcartes().clear();
+
+        // 3. Supprimer les enchères
+        enchereRepository.deleteByPartie_Id(partieId);
+
+        // 4. Réinitialiser l'état de la partie
+        partie.setPhaseJeu(null);
+        partie.setEnchereType(null);
+        partie.setMultiplicateur(0);
+        partie.setAppelRoi(null);
+        partie.setPartenaireId(null);
+        partie.setPreneurId(null);
+        partie.setPassesConsecutives(0);
+        partie.setTourJoueurIndex(0);
+        partie.setPetitAuBoutPreneur(false);
+        partieRepository.save(partie);
+
+        // 5. Créer et distribuer un nouveau jeu de 78 cartes
+        List<Carte> paquet = new ArrayList<>();
+        String[] couleurs = {"Coeur", "Carreau", "Trefle", "Pique"};
+        String[] valeursCouleur = {"1","2","3","4","5","6","7","8","9","10","Valet","Cavalier","Dame","Roi"};
+        for (String couleur : couleurs) {
+            for (String valeur : valeursCouleur) {
+                Carte c = new Carte(); c.setCouleur(couleur); c.setValeur(valeur);
+                paquet.add(carteRepository.save(c));
+            }
+        }
+        for (int i = 1; i <= 21; i++) {
+            Carte c = new Carte(); c.setCouleur("Atout"); c.setValeur(String.valueOf(i));
+            paquet.add(carteRepository.save(c));
+        }
+        Carte excuse = new Carte(); excuse.setCouleur("Atout"); excuse.setValeur("Excuse");
+        paquet.add(carteRepository.save(excuse));
+
+        Collections.shuffle(paquet);
+
+        int cartesParJoueur = (paquet.size() - tailleChien) / nbJoueurs;
+        List<Joueur> joueursTriés = joueurs.stream()
+                .sorted(Comparator.comparingInt(Joueur::getPosition))
+                .collect(Collectors.toList());
+        for (int i = 0; i < nbJoueurs; i++) {
+            Joueur j = joueursTriés.get(i);
+            j.setCartesEnMain(new ArrayList<>(paquet.subList(i * cartesParJoueur, (i + 1) * cartesParJoueur)));
+            joueurRepository.save(j);
+        }
+        partie.setChien(new ArrayList<>(paquet.subList(nbJoueurs * cartesParJoueur, paquet.size())));
+        partieRepository.save(partie);
     }
 
     /**
@@ -566,6 +638,17 @@ public class TarotService {
                     nouveau.setJoueurOuvreurIndex(partie.getTourJoueurIndex());
                     return pliRepository.save(nouveau);
                 });
+
+        // Règle 5j : personne ne peut ouvrir un pli avec la couleur du Roi appelé tant qu'il n'est pas révélé
+        if (partie.getNbJoueursRequis() == 5
+                && partie.getAppelRoi() != null
+                && partie.getPartenaireId() == null
+                && pli.getCartesJouees().isEmpty()
+                && carteJouee.getCouleur().equals(partie.getAppelRoi())) {
+            throw new BusinessException(
+                "Vous ne pouvez pas ouvrir avec la couleur du Roi appelé ("
+                + partie.getAppelRoi() + ") tant qu'il n'a pas été joué.");
+        }
 
         // Vérifier les règles de jeu Tarot
         verifierReglesTarot(joueurActif, carteJouee, pli);

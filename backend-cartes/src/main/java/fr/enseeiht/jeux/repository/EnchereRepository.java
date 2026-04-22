@@ -12,4 +12,6 @@ public interface EnchereRepository extends JpaRepository<Enchere, Long> {
     List<Enchere> findByPartie_IdOrderByIdAsc(Long partieId);
 
     int countByPartie_Id(Long partieId);
+
+    void deleteByPartie_Id(Long partieId);
 }

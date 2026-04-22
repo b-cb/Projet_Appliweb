@@ -15,10 +15,9 @@ export default function LobbyPage() {
   const [invitPseudo, setInvitPseudo] = useState('')
   const [flash, setFlash] = useState('')
 
-  // Panneau de création de partie
-  const [modeJeu, setModeJeu] = useState('COINCHE')   // COINCHE | TAROT
+  // Panneau de création
+  const [modeJeu, setModeJeu] = useState('COINCHE')
   const [nbJoueursMode, setNbJoueursMode] = useState(4)
-  const [avecBots, setAvecBots] = useState(false)
 
   const afficherFlash = (msg) => { setFlash(msg); setTimeout(() => setFlash(''), 3000) }
 
@@ -37,7 +36,9 @@ export default function LobbyPage() {
   }, [token, utilisateur])
 
   const chargerJoueurs = useCallback(async (partieId) => {
-    setJoueurs(await api.fetchJoueurs(token, partieId))
+    const liste = await api.fetchJoueurs(token, partieId)
+    setJoueurs(liste)
+    return liste
   }, [token])
 
   useEffect(() => {
@@ -49,36 +50,29 @@ export default function LobbyPage() {
     return () => clearInterval(interval)
   }, [utilisateur])
 
+  // Resync joueurs quand la partie sélectionnée change dans la liste rafraîchie
+  useEffect(() => {
+    if (!partieSelectionnee) return
+    const updated = parties.find(p => p.id === partieSelectionnee.id)
+    if (updated) setPartieSelectionnee(updated)
+  }, [parties])
+
   const selectionnerPartie = async (partieId) => {
     const p = await api.fetchPartie(token, partieId)
-    if (p) { setPartieSelectionnee(p); chargerJoueurs(partieId) }
+    if (p) {
+      setPartieSelectionnee(p)
+      chargerJoueurs(partieId)
+    }
   }
 
+  // Crée la partie, rejoint automatiquement, sélectionne dans le panneau droit
   const creerPartie = async () => {
-    if (avecBots) {
-      // Création avec bots : démarre directement (coinche ou tarot)
-      const { ok, data } = await api.creerPartieAvecBots(token, utilisateur.id, {
-        typeJeu: modeJeu, nbJoueurs: nbJoueursMode
-      })
-      if (ok) {
-        afficherFlash(`Partie #${data.id} avec bots créée !`)
-        chargerParties()
-        navigate(`/partie/${data.id}`)
-      } else {
-        afficherFlash(data?.erreur || 'Erreur lors de la création avec bots.')
-      }
-    } else {
-      // Création standard avec options (mode + nb joueurs)
-      const { ok, data } = await api.creerPartie(token, { typeJeu: modeJeu, nbJoueurs: nbJoueursMode })
-      if (ok) {
-        afficherFlash(`Partie #${data.id} créée !`)
-        await api.rejoindrePartie(token, data.id, utilisateur.id)
-        chargerParties()
-        selectionnerPartie(data.id)
-      } else {
-        afficherFlash(data?.erreur || 'Erreur lors de la création.')
-      }
-    }
+    const { ok, data } = await api.creerPartie(token, { typeJeu: modeJeu, nbJoueurs: nbJoueursMode })
+    if (!ok) { afficherFlash(data?.erreur || 'Erreur lors de la création.'); return }
+    await api.rejoindrePartie(token, data.id, utilisateur.id)
+    afficherFlash(`Partie #${data.id} créée !`)
+    chargerParties()
+    selectionnerPartie(data.id)
   }
 
   const supprimer = async (partieId, e) => {
@@ -101,8 +95,20 @@ export default function LobbyPage() {
 
   const demarrer = async (partieId) => {
     const { ok, data } = await api.demarrerPartie(token, partieId)
-    if (ok) { navigate(`/partie/${partieId}`) }
+    if (ok) navigate(`/partie/${partieId}`)
     else afficherFlash(data?.erreur || 'Erreur au démarrage.')
+  }
+
+  const toggleBots = async (partieId, botsDejaPresents) => {
+    if (botsDejaPresents) {
+      const { ok, data } = await api.retirerBots(token, partieId, utilisateur.id)
+      if (!ok) { afficherFlash(data?.erreur || 'Erreur lors du retrait des bots.'); return }
+    } else {
+      const { ok, data } = await api.remplirAvecBots(token, partieId, utilisateur.id)
+      if (!ok) { afficherFlash(data?.erreur || 'Erreur lors de l\'ajout des bots.'); return }
+    }
+    chargerJoueurs(partieId)
+    chargerParties()
   }
 
   const inviter = async (partieId) => {
@@ -132,6 +138,12 @@ export default function LobbyPage() {
 
   const invitationsEnAttente = invitations.filter(i => i.statut === 'EN_ATTENTE')
 
+  // Dérivé : y a-t-il des bots dans la partie sélectionnée ?
+  const botsPresents = joueurs.some(j => j.bot)
+  const nbRequis = partieSelectionnee?.nbJoueursRequis ?? 4
+  const partiePleine = joueurs.length >= nbRequis
+  const estDansLaPartie = joueurs.some(j => j.utilisateurId === utilisateur?.id)
+
   return (
     <div className="app">
       <header className="header">
@@ -148,7 +160,7 @@ export default function LobbyPage() {
       {flash && <div className="flash">{flash}</div>}
 
       <div className="main-content">
-        {/* Panneau gauche — liste des parties */}
+        {/* Panneau gauche — création + liste */}
         <div className="panel">
           <div className="panel-header">
             <h2>Parties ({parties.length})</h2>
@@ -161,37 +173,19 @@ export default function LobbyPage() {
               <div className="create-modes">
                 {[
                   { label: 'Coinche (4j)', typeJeu: 'COINCHE', nb: 4 },
-                  { label: 'Tarot 3j', typeJeu: 'TAROT', nb: 3 },
-                  { label: 'Tarot 4j', typeJeu: 'TAROT', nb: 4 },
-                  { label: 'Tarot 5j', typeJeu: 'TAROT', nb: 5 },
-                ].map(({ label, typeJeu, nb, disabled }) => (
+                  { label: 'Tarot 3j',    typeJeu: 'TAROT',   nb: 3 },
+                  { label: 'Tarot 4j',    typeJeu: 'TAROT',   nb: 4 },
+                  { label: 'Tarot 5j',    typeJeu: 'TAROT',   nb: 5 },
+                ].map(({ label, typeJeu, nb }) => (
                   <button
                     key={label}
-                    className={`mode-btn ${modeJeu === typeJeu && nbJoueursMode === nb ? 'mode-btn-active' : ''} ${disabled ? 'mode-btn-disabled' : ''}`}
-                    onClick={() => { if (!disabled) { setModeJeu(typeJeu); setNbJoueursMode(nb) } }}
-                    title={disabled ? 'Bientôt disponible' : undefined}
+                    className={`mode-btn ${modeJeu === typeJeu && nbJoueursMode === nb ? 'mode-btn-active' : ''}`}
+                    onClick={() => { setModeJeu(typeJeu); setNbJoueursMode(nb) }}
                   >
-                    {label}{disabled && <span className="bientot"> soon</span>}
+                    {label}
                   </button>
                 ))}
               </div>
-            </div>
-
-            <div className="create-panel-row">
-              <label className="create-label">
-                <input
-                  type="checkbox"
-                  checked={avecBots}
-                  onChange={e => setAvecBots(e.target.checked)}
-                  style={{ marginRight: 6 }}
-                />
-                Remplir avec des bots
-                {modeJeu === 'TAROT' && nbJoueursMode === 5 && avecBots && (
-                  <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginLeft: 6 }}>
-                    (1 humain + 4 bots)
-                  </span>
-                )}
-              </label>
             </div>
 
             <button className="btn-primary create-btn-main" onClick={creerPartie}>
@@ -213,10 +207,13 @@ export default function LobbyPage() {
                         {p.statut === 'OUVERTE' ? 'Ouverte' : p.statut === 'EN_ENCHERE' ? 'Enchères' : 'En jeu'}
                       </span>
                       {p.typeJeu && p.typeJeu !== 'COINCHE' && (
-                        <span className="badge badge-mode">{p.typeJeu}</span>
+                        <span className="badge badge-mode">{p.typeJeu} {p.nbJoueursRequis}j</span>
                       )}
                     </div>
-                    <div className="party-scores">Éq.A: {p.scoreA} — Éq.B: {p.scoreB}</div>
+                    <div className="party-scores">
+                      {p.nombreJoueurs}/{p.nbJoueursRequis} joueurs
+                      {p.statut !== 'OUVERTE' && ` · Éq.A: ${p.scoreA} — Éq.B: ${p.scoreB}`}
+                    </div>
                     {p.statut === 'OUVERTE' && (
                       <div className="party-card-actions">
                         <button className="btn-small btn-join"
@@ -246,37 +243,55 @@ export default function LobbyPage() {
         <div className="panel">
           {partieSelectionnee ? (
             <div className="party-detail">
-              <h2>Partie #{partieSelectionnee.id}</h2>
+              <h2>Partie #{partieSelectionnee.id}
+                {partieSelectionnee.typeJeu && partieSelectionnee.typeJeu !== 'COINCHE' && (
+                  <span className="badge badge-mode" style={{ marginLeft: 8, fontSize: '0.75rem' }}>
+                    {partieSelectionnee.typeJeu} {partieSelectionnee.nbJoueursRequis}j
+                  </span>
+                )}
+              </h2>
               <p>Statut : <strong>{partieSelectionnee.statut}</strong></p>
 
-              <h3>Joueurs ({joueurs.length}/4)</h3>
-              <div className="equipes-grid">
-                <div className="equipe-col">
-                  <div className="equipe-label eq1">Équipe 1</div>
-                  {joueurs.filter(j => j.equipe === 1).map(j => (
-                    <div key={j.id} className="player-item">
-                      <span className="player-sym">♠</span>{j.pseudo || `Joueur #${j.id}`}
-                    </div>
-                  ))}
-                </div>
-                <div className="equipe-col">
-                  <div className="equipe-label eq2">Équipe 2</div>
-                  {joueurs.filter(j => j.equipe === 2).map(j => (
-                    <div key={j.id} className="player-item">
-                      <span className="player-sym">♥</span>{j.pseudo || `Joueur #${j.id}`}
-                    </div>
-                  ))}
-                </div>
+              <h3>Joueurs ({joueurs.length}/{nbRequis})</h3>
+              <div className="player-list-lobby">
+                {joueurs.map(j => (
+                  <div key={j.id} className={`player-item ${j.bot ? 'player-bot' : ''}`}>
+                    <span className="player-sym">{j.bot ? '🤖' : '♠'}</span>
+                    {j.pseudo || `Joueur #${j.id}`}
+                    {j.bot && <span className="bot-label"> (bot)</span>}
+                  </div>
+                ))}
+                {/* Emplacements vides */}
+                {Array.from({ length: Math.max(0, nbRequis - joueurs.length) }).map((_, i) => (
+                  <div key={`vide-${i}`} className="player-item player-vide">
+                    <span className="player-sym">·</span>
+                    <em>Place libre</em>
+                  </div>
+                ))}
               </div>
 
               <div className="party-actions">
-                {partieSelectionnee.statut === 'OUVERTE' && joueurs.length === 4 && (
+                {/* Bouton démarrer — visible dès que la partie est pleine */}
+                {partieSelectionnee.statut === 'OUVERTE' && partiePleine && (
                   <button className="btn-primary btn-start" onClick={() => demarrer(partieSelectionnee.id)}>
                     Démarrer la partie
                   </button>
                 )}
 
-                {partieSelectionnee.statut === 'OUVERTE' && (
+                {/* Contrôle des bots — disponible tant que la partie est ouverte et que l'utilisateur est dedans */}
+                {partieSelectionnee.statut === 'OUVERTE' && estDansLaPartie && (
+                  <label className="bots-toggle">
+                    <input
+                      type="checkbox"
+                      checked={botsPresents}
+                      onChange={() => toggleBots(partieSelectionnee.id, botsPresents)}
+                    />
+                    Remplir les places libres avec des bots
+                  </label>
+                )}
+
+                {/* Invitation */}
+                {partieSelectionnee.statut === 'OUVERTE' && !partiePleine && estDansLaPartie && (
                   <div className="invite-section">
                     <h4>Inviter un joueur</h4>
                     <div className="invite-row">
@@ -289,7 +304,7 @@ export default function LobbyPage() {
                         list="pseudos-list"
                       />
                       <datalist id="pseudos-list">
-                        {utilisateurs.filter(u => u.id !== utilisateur?.id).map(u => (
+                        {utilisateurs.filter(u => u.id !== utilisateur?.id && !u.pseudo?.startsWith('Bot_')).map(u => (
                           <option key={u.id} value={u.pseudo} />
                         ))}
                       </datalist>

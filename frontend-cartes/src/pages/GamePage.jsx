@@ -124,6 +124,12 @@ function CoinchePage() {
     else afficherFlash(data?.erreur || "Erreur d'enchère.")
   }
 
+  const handleCoincher = async (surcoinche) => {
+    const { ok, data } = await api.coincher(token, partieId, utilisateur.id, surcoinche)
+    if (ok) setEtatJeu(data)
+    else afficherFlash(data?.erreur || 'Impossible de coincher.')
+  }
+
   const handleJouerCarte = async (carteId) => {
     const { ok, data } = await api.jouerCarte(token, partieId, utilisateur.id, carteId)
     if (ok) setEtatJeu(data)
@@ -209,7 +215,7 @@ function CoinchePage() {
           {/* Panel enchères (superposé sur le centre si EN_ENCHERE) */}
           {etatJeu.statut === 'EN_ENCHERE' && (
             <div className="enchere-overlay">
-              <BiddingPanel etatJeu={etatJeu} monTour={monTour} onEncherir={handleEnchere} />
+              <BiddingPanel etatJeu={etatJeu} monTour={monTour} onEncherir={handleEnchere} onCoincher={handleCoincher} />
             </div>
           )}
 

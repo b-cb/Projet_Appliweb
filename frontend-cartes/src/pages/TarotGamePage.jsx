@@ -54,16 +54,33 @@ function MiniCarteTarot({ cp }) {
   )
 }
 
+// Tri des cartes Tarot : Atouts d'abord (1→21+Excuse), puis couleurs par groupe et force
+const ORDRE_COULEUR_TAROT = ['Atout', 'Pique', 'Coeur', 'Carreau', 'Trefle']
+const ORDRE_VALEUR_TAROT_COULEUR = ['Valet', 'Cavalier', 'Dame', 'Roi', 'As', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+const ATOUT_VALS = ['Excuse', '1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21']
+
+function trierCartesTarot(cartes) {
+  return [...cartes].sort((a, b) => {
+    const ci = ORDRE_COULEUR_TAROT.indexOf(a.couleur) - ORDRE_COULEUR_TAROT.indexOf(b.couleur)
+    if (ci !== 0) return ci
+    if (a.couleur === 'Atout') return ATOUT_VALS.indexOf(a.valeur) - ATOUT_VALS.indexOf(b.valeur)
+    return ORDRE_VALEUR_TAROT_COULEUR.indexOf(a.valeur) - ORDRE_VALEUR_TAROT_COULEUR.indexOf(b.valeur)
+  })
+}
+
 function MainTarot({ cartes, monTour, statut, onJouer }) {
   if (!cartes || cartes.length === 0) return null
+  const jouable = monTour && statut === 'EN_JEU'
+  const cartesTriees = trierCartesTarot(cartes)
   return (
     <div className="hand-zone">
       <div className="hand-cartes">
-        {cartes.map(c => (
+        {cartesTriees.map(c => (
           <button
             key={c.id}
-            className={`carte-svg ${monTour && statut === 'EN_JEU' ? 'jouable' : 'inactive'}`}
-            onClick={() => monTour && statut === 'EN_JEU' && onJouer(c.id)}
+            className={`carte-svg ${jouable ? 'jouable' : 'inactive'}`}
+            onClick={() => jouable && onJouer(c.id)}
+            disabled={!jouable}
             title={`${c.valeur} ${c.couleur !== 'Atout' ? SUIT_SYMBOLS[c.couleur] : ''}`}
           >
             <CardImage carte={c} largeur={70} />

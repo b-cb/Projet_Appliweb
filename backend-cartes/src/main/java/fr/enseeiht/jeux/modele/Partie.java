@@ -28,6 +28,7 @@ public class Partie {
     private Long preneurId;            // id du Joueur qui a pris le contrat
     private int passesConsecutives;    // compteur de passes (reset à 0 quand une enchère est faite)
     private int numPliCourant;         // 1-N : numéro du pli en cours
+    private int coinche;               // 0 = normal, 1 = coinché (×2), 2 = surcoinché (×4)
 
     // Multi-manche
     private int maxDonnes;     // 0 = pas de limite (condition par score), N = nombre de donnes à jouer
@@ -166,6 +167,9 @@ public class Partie {
     public void setPassesConsecutives(int passesConsecutives) {
         this.passesConsecutives = passesConsecutives;
     }
+
+    public int getCoinche() { return coinche; }
+    public void setCoinche(int coinche) { this.coinche = coinche; }
 
     public int getNumPliCourant() {
         return numPliCourant;

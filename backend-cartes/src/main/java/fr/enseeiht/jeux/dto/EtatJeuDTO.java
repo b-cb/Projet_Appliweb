@@ -39,6 +39,11 @@ public class EtatJeuDTO {
     // Résultat (si TERMINEE)
     private ResultatDTO resultat;
 
+    // Coinche/Surcoinche
+    private int coinche;  // 0=normal, 1=coinché (×2), 2=surcoinché (×4)
+    private Long preneurId; // id du preneur (pour savoir qui peut surcoincher)
+    private int preneurEquipe; // équipe du preneur (1 ou 2)
+
     // Multi-manche
     private int donneActuelle;
     private int maxDonnes;
@@ -118,6 +123,15 @@ public class EtatJeuDTO {
 
     public int getScoreGlobalB() { return scoreGlobalB; }
     public void setScoreGlobalB(int scoreGlobalB) { this.scoreGlobalB = scoreGlobalB; }
+
+    public int getCoinche() { return coinche; }
+    public void setCoinche(int coinche) { this.coinche = coinche; }
+
+    public Long getPreneurId() { return preneurId; }
+    public void setPreneurId(Long preneurId) { this.preneurId = preneurId; }
+
+    public int getPreneurEquipe() { return preneurEquipe; }
+    public void setPreneurEquipe(int preneurEquipe) { this.preneurEquipe = preneurEquipe; }
 
     // --- Inner DTO : une carte dans le pli courant + qui l'a jouée ---
     public static class CartePliDTO {

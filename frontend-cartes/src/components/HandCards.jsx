@@ -1,5 +1,18 @@
 import CardImage from './CardImage'
 
+// Ordre de tri par couleur (groupe): Pique, Coeur, Carreau, Trèfle
+// Puis dans chaque couleur, par force croissante
+const ORDER_COULEUR = ['Pique', 'Coeur', 'Carreau', 'Trefle']
+const ORDER_VALEUR = ['7', '8', '9', 'Valet', 'Dame', 'Roi', '10', 'As']
+
+function trierCartes(cartes) {
+  return [...cartes].sort((a, b) => {
+    const ci = ORDER_COULEUR.indexOf(a.couleur) - ORDER_COULEUR.indexOf(b.couleur)
+    if (ci !== 0) return ci
+    return ORDER_VALEUR.indexOf(a.valeur) - ORDER_VALEUR.indexOf(b.valeur)
+  })
+}
+
 function Carte({ carte, jouable, onClick }) {
   return (
     <button
@@ -18,6 +31,7 @@ export default function HandCards({ cartes, monTour, statut, onJouer }) {
   if (!cartes || cartes.length === 0) return null
 
   const jouable = monTour && statut === 'EN_JEU'
+  const cartesTriees = trierCartes(cartes)
 
   return (
     <div className="main-zone">
@@ -27,7 +41,7 @@ export default function HandCards({ cartes, monTour, statut, onJouer }) {
         {statut === 'EN_JEU' && !monTour && <span className="main-label-info"> — attente de votre tour</span>}
       </div>
       <div className="main-cartes">
-        {cartes.map(carte => (
+        {cartesTriees.map(carte => (
           <Carte
             key={carte.id}
             carte={carte}

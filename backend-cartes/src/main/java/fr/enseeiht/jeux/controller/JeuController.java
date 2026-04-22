@@ -59,4 +59,16 @@ public class JeuController {
         Long carteId = ((Number) body.get("carteId")).longValue();
         return ResponseEntity.ok(jeuService.jouerCarte(id, utilisateurId, carteId));
     }
+
+    /**
+     * POST /api/partie/{id}/coincher?utilisateurId=X
+     * POST /api/partie/{id}/coincher?utilisateurId=X&surcoinche=true
+     */
+    @PostMapping("/{id}/coincher")
+    public ResponseEntity<EtatJeuDTO> coincher(
+            @PathVariable Long id,
+            @RequestParam Long utilisateurId,
+            @RequestParam(defaultValue = "false") boolean surcoinche) {
+        return ResponseEntity.ok(jeuService.coincher(id, utilisateurId, surcoinche));
+    }
 }

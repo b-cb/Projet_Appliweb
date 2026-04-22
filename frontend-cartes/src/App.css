@@ -705,8 +705,9 @@ body {
 }
 
 .carte-svg.inactive {
-  opacity: 0.65;
-  filter: saturate(0.5);
+  opacity: 0.42;
+  filter: grayscale(80%) saturate(0.3);
+  cursor: not-allowed;
 }
 
 /* Mini cartes SVG dans le pli courant / dernier pli */

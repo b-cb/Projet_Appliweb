@@ -360,11 +360,9 @@ public class TarotService {
             joueurRepository.save(j);
         }
 
-        // Le preneur ouvre le premier pli
-        Joueur preneur = joueurs.stream()
-                .filter(j -> j.getId().equals(partie.getPreneurId()))
-                .findFirst().orElse(joueurs.get(0));
-        partie.setTourJoueurIndex(preneur.getPosition());
+        // C'est le premier joueur de la donne (rotation) qui ouvre le premier pli, pas le preneur
+        int nbJoueursPartie = partie.getNbJoueursRequis();
+        partie.setTourJoueurIndex((partie.getDonneActuelle() - 1) % nbJoueursPartie);
 
         // Déterminer la prochaine phase
         boolean cinqJoueurs = partie.getNbJoueursRequis() == 5;
@@ -1240,7 +1238,9 @@ public class TarotService {
         partie.setScoreB(0);
         partie.setPoigneeDeclaree(null);
         partie.setPetitAuBoutPreneur(false);
-        partie.setTourJoueurIndex(0);
+        // Le premier joueur tourne d'une position à chaque donne (3j, 4j ou 5j)
+        int premierJoueur = (partie.getDonneActuelle() - 1) % nbJoueurs;
+        partie.setTourJoueurIndex(premierJoueur);
         // Ne PAS réinitialiser : donneActuelle, maxDonnes, maxPoints, scoreGlobalA/B
         partieRepository.save(partie);
     }

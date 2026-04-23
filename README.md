@@ -36,6 +36,7 @@ Attendre le message `Started BackendCartesApplication` (environ 10-15 secondes).
 ```bash
 cd frontend-cartes
 npm install          # uniquement au premier lancement
+node scripts/generate-tarot-sprite.js > public/tarot-cards.svg  # regénère le sprite si besoin
 npm run dev -- --host
 ```
 
@@ -93,6 +94,26 @@ Après 8 plis, les scores sont calculés automatiquement :
 - **Contrat rempli** : le preneur a fait son contrat — les scores des plis sont conservés
 - **Contrat chuté** : les défenseurs gagnent `160 + valeur_contrat` pts, le preneur marque 0
 - Le `scoreGlobal` des joueurs de l'équipe gagnante est incrémenté
+
+---
+
+## Rendu des cartes
+
+Les cartes sont rendues à partir de deux sprites SVG dans `frontend-cartes/public/` :
+
+| Sprite | Contenu | Source |
+|--------|---------|--------|
+| `svg-cards.svg` | 52 cartes ordinaires + dos | package npm `svg-cards@4` |
+| `tarot-cards.svg` | 22 atouts (1-21 + Excuse) + 4 Cavaliers | généré par `scripts/generate-tarot-sprite.js` |
+
+Pour régénérer `tarot-cards.svg` (après modification du style des cartes) :
+
+```bash
+cd frontend-cartes
+node scripts/generate-tarot-sprite.js > public/tarot-cards.svg
+```
+
+Aucune dépendance npm supplémentaire n'est nécessaire : le script utilise Node.js natif.
 
 ---
 

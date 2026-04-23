@@ -48,7 +48,7 @@ const SEAT_POSITIONS = {
 function MiniCarteTarot({ cp }) {
   return (
     <div className="pli-carte-item">
-      <CardImage carte={cp.carte} largeur={42} />
+      <CardImage carte={cp.carte} largeur={63} />
       <div className="mini-carte-pseudo">{cp.pseudo}</div>
     </div>
   )
@@ -83,7 +83,7 @@ function MainTarot({ cartes, monTour, statut, onJouer }) {
             disabled={!jouable}
             title={`${c.valeur} ${c.couleur !== 'Atout' ? SUIT_SYMBOLS[c.couleur] : ''}`}
           >
-            <CardImage carte={c} largeur={70} />
+            <CardImage carte={c} largeur={105} />
           </button>
         ))}
       </div>

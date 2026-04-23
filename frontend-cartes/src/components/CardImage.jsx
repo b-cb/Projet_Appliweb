@@ -1,45 +1,53 @@
 /**
- * Affiche une carte à jouer :
- *   - Cartes Coinche (32 cartes) → sprite SVG via svg-cards
- *   - Cartes Tarot couleur + Cavalier → sprite SVG (Cavalier = jack avec overlay "Ca")
- *   - Atouts Tarot 1-21 + Excuse → TrumpCard (rendu CSS)
- *   - Dos de carte → svg-cards#back
+ * Affiche une carte à jouer.
  *
- * SVG fragment IDs : "{suit}_{value}" (ex: heart_1, spade_jack, club_10)
+ * Sources d'images :
+ *   - Dos                        → svg-cards.svg#back  (SVG sprite)
+ *   - Atouts 1-21 + Excuse       → /tarot/atout_NN.png (CC0, itch.io)
+ *   - Cartes de couleur (1-14)   → /tarot/{couleur}_NN.png
+ *     As=01, 2-10, Valet=11, Cavalier=12, Dame=13, Roi=14
+ *     Cups→coeur, Pentacles→carreau, Swords→pique, Wands→trefle
+ *
+ * Rapport largeur/hauteur réel des PNG : 456×638 ≈ 1.398
  */
-import TrumpCard from './TrumpCard'
 
-const SUIT_MAP = {
-  Coeur: 'heart',
-  Carreau: 'diamond',
-  Trefle: 'club',
-  Pique: 'spade',
+// Ratio des PNG du deck (456 × 638)
+const IMG_RATIO = 638 / 456
+
+const SUIT_FR = {
+  Coeur:   'coeur',
+  Carreau: 'carreau',
+  Pique:   'pique',
+  Trefle:  'trefle',
 }
 
-const VALUE_MAP = {
-  As: '1',
-  Valet: 'jack',
-  Dame: 'queen',
-  Roi: 'king',
-  Cavalier: 'jack', // nearest SVG available; we'll overlay "Ca"
+const VALEUR_NUM = {
+  As:       '01',
+  Valet:    '11',
+  Cavalier: '12',
+  Dame:     '13',
+  Roi:      '14',
 }
 
-const SYMBOLES = { Coeur: '♥', Carreau: '♦', Trefle: '♣', Pique: '♠' }
+function atoutPath(valeur) {
+  const n = valeur === 'Excuse' ? '00' : String(valeur).padStart(2, '0')
+  return `/tarot/atout_${n}.png`
+}
 
-function carteToSvgId(carte) {
-  const suit = SUIT_MAP[carte.couleur]
+function couleurPath(couleur, valeur) {
+  const suit = SUIT_FR[couleur]
   if (!suit) return null
-  const value = VALUE_MAP[carte.valeur] ?? carte.valeur.toLowerCase()
-  return `${suit}_${value}`
+  const n = VALEUR_NUM[valeur] ?? String(valeur).padStart(2, '0')
+  return `/tarot/${suit}_${n}.png`
 }
 
 /**
  * @param {{ carte?: {valeur:string, couleur:string}, largeur?: number, dos?: boolean }} props
  */
 export default function CardImage({ carte, largeur = 70, dos = false }) {
-  const hauteur = Math.round(largeur * (244.64 / 169.075))
+  const hauteur = Math.round(largeur * IMG_RATIO)
 
-  // --- Dos ---
+  // --- Dos de carte (svg-cards, aucune image dos dans le deck) ---
   if (dos) {
     return (
       <svg
@@ -55,54 +63,33 @@ export default function CardImage({ carte, largeur = 70, dos = false }) {
 
   if (!carte) return null
 
-  // --- Atouts Tarot (1-21) et Excuse ---
-  if (carte.couleur === 'Atout') {
-    return <TrumpCard valeur={carte.valeur} largeur={largeur} />
-  }
+  const src = carte.couleur === 'Atout'
+    ? atoutPath(carte.valeur)
+    : couleurPath(carte.couleur, carte.valeur)
 
-  const svgId = carteToSvgId(carte)
-
-  if (!svgId) {
-    // Fallback texte pour cartes non reconnues
-    const sym = SYMBOLES[carte.couleur] ?? ''
+  if (!src) {
+    // Fallback texte pour couleur non reconnue
     return (
       <div style={{
         width: largeur, height: hauteur,
-        border: '1px solid #aaa', borderRadius: 6,
-        display: 'flex', flexDirection: 'column',
-        alignItems: 'center', justifyContent: 'center',
-        fontSize: largeur * 0.22, background: '#fff',
-        color: ['Coeur', 'Carreau'].includes(carte.couleur) ? '#c00' : '#111',
+        border: '1px solid #aaa', borderRadius: 4,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: largeur * 0.2, background: '#fff',
         userSelect: 'none',
       }}>
-        <span>{carte.valeur}</span>
-        <span>{sym}</span>
+        {carte.valeur}
       </div>
     )
   }
 
-  // --- Cavalier Tarot : jack SVG + badge "Ca" overlay ---
-  const isCavalier = carte.valeur === 'Cavalier'
-
   return (
-    <div style={{ position: 'relative', width: largeur, height: hauteur, display: 'inline-block' }}>
-      <svg
-        width={largeur} height={hauteur}
-        viewBox="0 0 169.075 244.640"
-        style={{ display: 'block' }}
-        aria-label={`${carte.valeur} de ${carte.couleur}`}
-      >
-        <use href={`/svg-cards.svg#${svgId}`} />
-      </svg>
-      {isCavalier && (
-        <span style={{
-          position: 'absolute', top: Math.round(largeur * 0.04), right: Math.round(largeur * 0.06),
-          background: 'rgba(0,0,100,0.75)', color: '#fff',
-          fontSize: Math.round(largeur * 0.14), fontWeight: 'bold',
-          borderRadius: 3, padding: '1px 3px',
-          lineHeight: 1.2, pointerEvents: 'none',
-        }}>Ca</span>
-      )}
-    </div>
+    <img
+      src={src}
+      alt={`${carte.valeur} de ${carte.couleur}`}
+      width={largeur}
+      height={hauteur}
+      style={{ display: 'block', borderRadius: 4 }}
+      draggable={false}
+    />
   )
 }

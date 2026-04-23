@@ -8,7 +8,7 @@ function positionVisuelle(maPosition, autrePosition) {
 function MiniCarte({ carte }) {
   return (
     <div className="mini-carte-svg">
-      <CardImage carte={carte} largeur={42} />
+      <CardImage carte={carte} largeur={75} />
     </div>
   )
 }

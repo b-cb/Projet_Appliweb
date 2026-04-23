@@ -54,9 +54,9 @@ function MiniCarteTarot({ cp }) {
   )
 }
 
-// Tri des cartes Tarot : Atouts d'abord (1→21+Excuse), puis couleurs par groupe et force
-const ORDRE_COULEUR_TAROT = ['Atout', 'Pique', 'Coeur', 'Carreau', 'Trefle']
-const ORDRE_VALEUR_TAROT_COULEUR = ['Valet', 'Cavalier', 'Dame', 'Roi', 'As', '2', '3', '4', '5', '6', '7', '8', '9', '10']
+// Tri des cartes Tarot : couleurs ordonnées, valeurs croissantes.
+const ORDRE_COULEUR_TAROT = ['Carreau', 'Pique', 'Atout', 'Coeur', 'Trefle']
+const ORDRE_VALEUR_TAROT_COULEUR = ['As', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'Valet', 'Cavalier', 'Dame', 'Roi']
 const ATOUT_VALS = ['Excuse', '1','2','3','4','5','6','7','8','9','10','11','12','13','14','15','16','17','18','19','20','21']
 
 function trierCartesTarot(cartes) {
@@ -75,17 +75,19 @@ function MainTarot({ cartes, monTour, statut, onJouer }) {
   return (
     <div className="hand-zone">
       <div className="hand-cartes">
-        {cartesTriees.map(c => (
+        {cartesTriees.map(c => {
+          const cssClass = statut === 'EN_ENCHERE' ? 'carte-svg' : `carte-svg ${jouable ? 'jouable' : 'inactive'}`
+          return (
           <button
             key={c.id}
-            className={`carte-svg ${jouable ? 'jouable' : 'inactive'}`}
+            className={cssClass}
             onClick={() => jouable && onJouer(c.id)}
             disabled={!jouable}
             title={`${c.valeur} ${c.couleur !== 'Atout' ? SUIT_SYMBOLS[c.couleur] : ''}`}
           >
             <CardImage carte={c} largeur={105} />
           </button>
-        ))}
+        )})}
       </div>
     </div>
   )
@@ -279,7 +281,7 @@ export default function TarotGamePage() {
                     className={`joueur-info-tarot ${estActif ? 'joueur-actif-tarot' : ''}`}
                     style={seatStyle}
                   >
-                    <span className="joueur-nom">{j.pseudo}</span>
+                    <span className="joueur-nom">{j.pseudo} ({j.scorePartie ?? 0} pts)</span>
                     {estActif && <span className="tour-indicator-mini">▶</span>}
                   </div>
                 )

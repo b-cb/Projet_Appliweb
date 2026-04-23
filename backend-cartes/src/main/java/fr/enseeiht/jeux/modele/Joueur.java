@@ -14,6 +14,7 @@ public class Joueur {
 
     private int equipe;
     private int position;
+    private int scorePartie = 0;
 
     @ManyToOne(optional = false)
     @JoinColumn(name = "utilisateur_id")
@@ -77,6 +78,14 @@ public class Joueur {
 
     public void setCartesEnMain(List<Carte> cartesEnMain) {
         this.cartesEnMain = cartesEnMain;
+    }
+
+    public int getScorePartie() {
+        return scorePartie;
+    }
+
+    public void setScorePartie(int scorePartie) {
+        this.scorePartie = scorePartie;
     }
 
 }

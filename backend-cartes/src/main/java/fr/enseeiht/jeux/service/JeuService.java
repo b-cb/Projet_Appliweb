@@ -957,7 +957,8 @@ public class JeuService {
             // preneure
             partie.setPassesConsecutives(0);
 
-            // La parole revient au preneur lui-même (pas forcément le joueur à la position la plus basse),
+            // La parole revient au preneur lui-même (pas forcément le joueur à la position
+            // la plus basse),
             // puis à son partenaire s'il passe également.
             partie.setTourJoueurIndex(preneur.getPosition());
         }

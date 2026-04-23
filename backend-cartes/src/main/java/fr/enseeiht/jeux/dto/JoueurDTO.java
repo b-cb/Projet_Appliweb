@@ -9,16 +9,18 @@ public class JoueurDTO {
     private int position;
     private String pseudo;
     private Long utilisateurId;
+    private int scorePartie;
 
     public JoueurDTO() {
     }
 
-    public JoueurDTO(Long id, int equipe, int position, String pseudo, Long utilisateurId) {
+    public JoueurDTO(Long id, int equipe, int position, String pseudo, Long utilisateurId, int scorePartie) {
         this.id = id;
         this.equipe = equipe;
         this.position = position;
         this.pseudo = pseudo;
         this.utilisateurId = utilisateurId;
+        this.scorePartie = scorePartie;
     }
 
     public static JoueurDTO fromEntity(Joueur j) {
@@ -27,7 +29,8 @@ public class JoueurDTO {
                 j.getEquipe(),
                 j.getPosition(),
                 j.getUtilisateur() != null ? j.getUtilisateur().getPseudo() : null,
-                j.getUtilisateur() != null ? j.getUtilisateur().getId() : null
+                j.getUtilisateur() != null ? j.getUtilisateur().getId() : null,
+                j.getScorePartie()
         );
     }
 
@@ -69,5 +72,13 @@ public class JoueurDTO {
 
     public void setUtilisateurId(Long utilisateurId) {
         this.utilisateurId = utilisateurId;
+    }
+
+    public int getScorePartie() {
+        return scorePartie;
+    }
+
+    public void setScorePartie(int scorePartie) {
+        this.scorePartie = scorePartie;
     }
 }

@@ -102,11 +102,12 @@ public class TarotScoringService {
      *
      * @param pointsPreneurX2 points ×2 du preneur (tricks + écartes)
      * @param bouts           nombre de bouts capturés par le preneur
-     * @param enchereType     "PETITE"|"GARDE"|"GARDE_SANS"|"GARDE_CONTRE"
-     * @param petitAuBout     true si le preneur a réalisé le Petit au bout
+     * @param enchereType        "PETITE"|"GARDE"|"GARDE_SANS"|"GARDE_CONTRE"
+     * @param petitAuBoutPreneur true si le preneur a réalisé le Petit au bout
+     * @param petitAuBoutDefense true si la défense a réalisé le Petit au bout
      * @return score du preneur (positif = preneur gagne, négatif = preneur perd)
      */
-    public int calculerScore(int pointsPreneurX2, int bouts, String enchereType, boolean petitAuBout) {
+    public int calculerScore(int pointsPreneurX2, int bouts, String enchereType, boolean petitAuBoutPreneur, boolean petitAuBoutDefense) {
         int seuil = seuilPourBouts(bouts);
         int mult = multiplicateurPourType(enchereType);
 
@@ -121,12 +122,15 @@ public class TarotScoringService {
         int resultatBrutX2 = (50 + Math.abs(ecartX2)) * mult;
         int resultat = (resultatBrutX2 + 1) / 2; // ceiling (prefer rounding up)
 
-        // Bonus Petit au bout
-        if (petitAuBout) {
-            resultat += 10 * mult;
+        if (rempli) {
+            if (petitAuBoutPreneur) resultat += 10 * mult;
+            if (petitAuBoutDefense) resultat -= 10 * mult;
+            return resultat;
+        } else {
+            if (petitAuBoutPreneur) resultat -= 10 * mult;
+            if (petitAuBoutDefense) resultat += 10 * mult;
+            return -resultat;
         }
-
-        return rempli ? resultat : -resultat;
     }
 
     /**

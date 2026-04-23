@@ -13,16 +13,17 @@ function trierCartes(cartes) {
   })
 }
 
-function Carte({ carte, jouable, onClick }) {
+function Carte({ carte, jouable, enEnchere, onClick }) {
+  const cssClass = enEnchere ? 'carte-svg' : `carte-svg ${jouable ? 'jouable' : 'inactive'}`
   return (
     <button
-      className={`carte-svg ${jouable ? 'jouable' : 'inactive'}`}
+      className={cssClass}
       onClick={jouable ? onClick : undefined}
       disabled={!jouable}
       title={`${carte.valeur} de ${carte.couleur}`}
       aria-label={`${carte.valeur} de ${carte.couleur}`}
     >
-      <CardImage carte={carte} largeur={70} />
+      <CardImage carte={carte} largeur={100} />
     </button>
   )
 }
@@ -31,6 +32,7 @@ export default function HandCards({ cartes, monTour, statut, onJouer }) {
   if (!cartes || cartes.length === 0) return null
 
   const jouable = monTour && statut === 'EN_JEU'
+  const enEnchere = statut === 'EN_ENCHERE'
   const cartesTriees = trierCartes(cartes)
 
   return (
@@ -46,6 +48,7 @@ export default function HandCards({ cartes, monTour, statut, onJouer }) {
             key={carte.id}
             carte={carte}
             jouable={jouable}
+            enEnchere={enEnchere}
             onClick={() => onJouer(carte.id)}
           />
         ))}

@@ -12,12 +12,13 @@ public class PartieDTO {
     private int nombreJoueurs;
     private String typeJeu;
     private int nbJoueursRequis;
+    private java.util.Map<String, Integer> scoresJoueurs;
 
     public PartieDTO() {
     }
 
     public PartieDTO(Long id, String statut, String atout, int scoreA, int scoreB,
-                     int nombreJoueurs, String typeJeu, int nbJoueursRequis) {
+                     int nombreJoueurs, String typeJeu, int nbJoueursRequis, java.util.Map<String, Integer> scoresJoueurs) {
         this.id = id;
         this.statut = statut;
         this.atout = atout;
@@ -26,18 +27,28 @@ public class PartieDTO {
         this.nombreJoueurs = nombreJoueurs;
         this.typeJeu = typeJeu;
         this.nbJoueursRequis = nbJoueursRequis;
+        this.scoresJoueurs = scoresJoueurs;
     }
 
     public static PartieDTO fromEntity(Partie p) {
+        java.util.Map<String, Integer> map = new java.util.HashMap<>();
+        if (p.getJoueurs() != null) {
+            for(fr.enseeiht.jeux.modele.Joueur j : p.getJoueurs()) {
+                if (j.getUtilisateur() != null) {
+                    map.put(j.getUtilisateur().getPseudo(), j.getScorePartie());
+                }
+            }
+        }
         return new PartieDTO(
                 p.getId(),
                 p.getStatut(),
                 p.getAtout(),
-                p.getScoreA(),
-                p.getScoreB(),
+                p.getScoreGlobalA(),
+                p.getScoreGlobalB(),
                 p.getJoueurs() != null ? p.getJoueurs().size() : 0,
                 p.getTypeJeu() != null ? p.getTypeJeu() : "COINCHE",
-                p.getNbJoueursRequis() > 0 ? p.getNbJoueursRequis() : 4
+                p.getNbJoueursRequis() > 0 ? p.getNbJoueursRequis() : 4,
+                map
         );
     }
 
@@ -97,11 +108,20 @@ public class PartieDTO {
         this.typeJeu = typeJeu;
     }
 
+
     public int getNbJoueursRequis() {
         return nbJoueursRequis;
     }
 
     public void setNbJoueursRequis(int nbJoueursRequis) {
         this.nbJoueursRequis = nbJoueursRequis;
+    }
+
+    public java.util.Map<String, Integer> getScoresJoueurs() {
+        return scoresJoueurs;
+    }
+
+    public void setScoresJoueurs(java.util.Map<String, Integer> scoresJoueurs) {
+        this.scoresJoueurs = scoresJoueurs;
     }
 }

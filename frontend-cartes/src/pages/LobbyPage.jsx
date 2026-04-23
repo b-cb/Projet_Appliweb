@@ -251,7 +251,15 @@ export default function LobbyPage() {
                         <span className="badge badge-mode">{p.typeJeu}</span>
                       )}
                     </div>
-                    <div className="party-scores">Éq.A: {p.scoreA} — Éq.B: {p.scoreB}</div>
+                    {p.typeJeu === 'TAROT' ? (
+                      <div className="party-scores">
+                        {p.scoresJoueurs && Object.entries(p.scoresJoueurs).map(([pseudo, score]) => (
+                          <span key={pseudo} style={{marginRight: 6}}>{pseudo}: {score}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="party-scores">Éq.A: {p.scoreA} — Éq.B: {p.scoreB}</div>
+                    )}
                     {p.statut === 'OUVERTE' && (
                       <div className="party-card-actions">
                         <button className="btn-small btn-join"

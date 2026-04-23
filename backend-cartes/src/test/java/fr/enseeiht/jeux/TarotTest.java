@@ -193,7 +193,7 @@ class TarotTest {
         void contratRempliJuste_score25x() {
             // 0 bouts, seuil=56, preneur fait exactement 56pts → écart=0
             // résultat = round((25 + 0) × 1) = 25
-            int score = scoringService.calculerScore(56 * 2, 0, "PETITE", false);
+            int score = scoringService.calculerScore(56 * 2, 0, "PETITE", false, false);
             assertThat(score).isEqualTo(25);
         }
 
@@ -202,7 +202,7 @@ class TarotTest {
         void contratRempliAvecEcart_scoreSuperieur() {
             // 2 bouts, seuil=41, preneur fait 51pts → écart=10
             // résultat = round((25 + 10) × 2) = 70 (Garde)
-            int score = scoringService.calculerScore(51 * 2, 2, "GARDE", false);
+            int score = scoringService.calculerScore(51 * 2, 2, "GARDE", false, false);
             assertThat(score).isEqualTo(70);
         }
 
@@ -211,7 +211,7 @@ class TarotTest {
         void contratChute_scoreNegatif() {
             // 0 bouts, seuil=56, preneur fait 40pts → écart=-16
             // résultat = -round((25 + 16) × 1) = -41
-            int score = scoringService.calculerScore(40 * 2, 0, "PETITE", false);
+            int score = scoringService.calculerScore(40 * 2, 0, "PETITE", false, false);
             assertThat(score).isNegative();
             assertThat(score).isEqualTo(-41);
         }
@@ -219,8 +219,8 @@ class TarotTest {
         @Test
         @DisplayName("Petit au bout côté preneur → bonus +10 × multiplicateur")
         void petitAuBout_ajouteBonus() {
-            int sansPetit = scoringService.calculerScore(56 * 2, 0, "GARDE", false);
-            int avecPetit = scoringService.calculerScore(56 * 2, 0, "GARDE", true);
+            int sansPetit = scoringService.calculerScore(56 * 2, 0, "GARDE", false, false);
+            int avecPetit = scoringService.calculerScore(56 * 2, 0, "GARDE", true, false);
             // bonus = 10 × 2 = 20 pour une Garde
             assertThat(avecPetit - sansPetit).isEqualTo(20);
         }
@@ -229,8 +229,8 @@ class TarotTest {
         @DisplayName("Garde contre (×6) multiplie bien le score par 6")
         void gardeContre_multiplieParSix() {
             // Même situation qu'en Petite
-            int petite = scoringService.calculerScore(56 * 2, 0, "PETITE", false);
-            int gardeContre = scoringService.calculerScore(56 * 2, 0, "GARDE_CONTRE", false);
+            int petite = scoringService.calculerScore(56 * 2, 0, "PETITE", false, false);
+            int gardeContre = scoringService.calculerScore(56 * 2, 0, "GARDE_CONTRE", false, false);
             assertThat(gardeContre).isEqualTo(petite * 6);
         }
 
@@ -238,8 +238,8 @@ class TarotTest {
         @DisplayName("3 bouts → seuil abaissé à 36, contrat plus facile à remplir")
         void troisBouts_seuilAbaise() {
             // 3 bouts, preneur fait 38pts (< seuil 41 si 2 bouts, > seuil 36 si 3 bouts)
-            int score2bouts = scoringService.calculerScore(38 * 2, 2, "PETITE", false);
-            int score3bouts = scoringService.calculerScore(38 * 2, 3, "PETITE", false);
+            int score2bouts = scoringService.calculerScore(38 * 2, 2, "PETITE", false, false);
+            int score3bouts = scoringService.calculerScore(38 * 2, 3, "PETITE", false, false);
             assertThat(score2bouts).isNegative();  // échoue avec 2 bouts
             assertThat(score3bouts).isPositive();  // réussit avec 3 bouts
         }

@@ -850,14 +850,29 @@ public class TarotService {
     // =========================================================
 
     private void terminerPartieTarot(Partie partie, List<Joueur> joueurs) {
+        int nbJoueurs = partie.getNbJoueursRequis();
+        int maxPlis = nombreMaxPlis(nbJoueurs);
+
         // Collecter toutes les cartes du preneur (tricks + écartes sauf GARDE_SANS/GARDE_CONTRE)
         List<Carte> cartesPreneur = collecterCartesPreneur(partie, joueurs);
 
         int pointsPreneurX2 = scoringService.calculerPointsX2(cartesPreneur)
                             + correctionExcuseX2(partie, joueurs);
         int bouts = scoringService.compterBouts(cartesPreneur);
+        
+        // Détecter qui a fait le Petit au bout (le dernier pli)
+        boolean petitAuBoutPreneur = false;
+        boolean petitAuBoutDefense = false;
+        List<Pli> plis = pliRepository.findByPartie_IdOrderByNumTourAsc(partie.getId());
+        Pli dernierPli = plis.stream().filter(p -> p.getNumTour() == maxPlis).findFirst().orElse(null);
+        if (dernierPli != null && dernierPli.getCartesJouees().stream().anyMatch(c -> "Atout".equals(c.getCouleur()) && "1".equals(c.getValeur()))) {
+            if (dernierPli.getGagnantEquipe() == 1) petitAuBoutPreneur = true;
+            else petitAuBoutDefense = true;
+            if (petitAuBoutPreneur) partie.setPetitAuBoutPreneur(true); // store for backward compatibility
+        }
+
         int score = scoringService.calculerScore(
-                pointsPreneurX2, bouts, partie.getEnchereType(), partie.isPetitAuBoutPreneur());
+                pointsPreneurX2, bouts, partie.getEnchereType(), petitAuBoutPreneur, petitAuBoutDefense);
 
         // Bonus Poignée (s'ajoute au camp gagnant, peu importe qui a déclaré)
         int bonusPoignee = scoringService.poigneeBonus(partie.getPoigneeDeclaree());
@@ -884,7 +899,7 @@ public class TarotService {
 
             if (cinqJoueurs) {
                 if (estPreneur) {
-                    int facteur = jeuSolo5j ? 4 : 3;
+                    int facteur = jeuSolo5j ? 4 : 2;
                     delta = rempli ? absScore * facteur : -absScore * facteur;
                 } else if (estPartenaire) {
                     delta = rempli ? absScore : -absScore;
@@ -894,11 +909,14 @@ public class TarotService {
             } else {
                 int nbDefenseurs = partie.getNbJoueursRequis() - 1;
                 if (estPreneur) {
-                    delta = score;
+                    delta = rempli ? absScore * nbDefenseurs : -absScore * nbDefenseurs;
                 } else {
-                    delta = rempli ? -score / nbDefenseurs : absScore;
+                    delta = rempli ? -absScore : absScore;
                 }
             }
+
+            j.setScorePartie(j.getScorePartie() + delta);
+            joueurRepository.save(j);
 
             Utilisateur u = j.getUtilisateur();
             u.setScoreGlobal(u.getScoreGlobal() + delta);
@@ -1112,9 +1130,17 @@ public class TarotService {
                      + correctionExcuseX2(partie, joueurs);
         int bouts = scoringService.compterBouts(cartesPreneur);
         int seuil = scoringService.seuilPourBouts(bouts);
-        int score = scoringService.calculerScore(pointsX2, bouts, partie.getEnchereType(), partie.isPetitAuBoutPreneur());
+        boolean petitAuBoutDefense = false;
+        List<Pli> plis = pliRepository.findByPartie_IdOrderByNumTourAsc(partie.getId());
+        int maxPlis = nombreMaxPlis(partie.getNbJoueursRequis());
+        Pli dernierPli = plis.stream().filter(p -> p.getNumTour() == maxPlis).findFirst().orElse(null);
+        if (dernierPli != null && dernierPli.getCartesJouees().stream().anyMatch(c -> "Atout".equals(c.getCouleur()) && "1".equals(c.getValeur()))) {
+            if (dernierPli.getGagnantEquipe() != 1) petitAuBoutDefense = true;
+        }
 
-        r.setPointsPreneurX2(pointsX2);
+        int score = scoringService.calculerScore(
+                pointsX2, bouts, partie.getEnchereType(), partie.isPetitAuBoutPreneur(), petitAuBoutDefense
+        ); r.setPointsPreneurX2(pointsX2);
         r.setBoutsPreneur(bouts);
         r.setSeuil(seuil);
         r.setContratRempli(score > 0);

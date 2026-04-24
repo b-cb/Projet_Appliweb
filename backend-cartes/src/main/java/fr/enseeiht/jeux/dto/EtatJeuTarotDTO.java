@@ -1,6 +1,7 @@
 package fr.enseeiht.jeux.dto;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Vue de l'état du jeu Tarot pour un joueur donné.
@@ -65,7 +66,14 @@ public class EtatJeuTarotDTO {
     // Poignée
     private String poigneeDeclaree;
 
+    // Scores individuels par joueur (joueurId → scorePartie), mis à jour à chaque donne
+    private Map<Long, Integer> scoresJoueurs;
+
     public EtatJeuTarotDTO() {}
+
+    public Map<Long, Integer> getScoresJoueurs() { return scoresJoueurs; }
+    public void setScoresJoueurs(Map<Long, Integer> scoresJoueurs) { this.scoresJoueurs = scoresJoueurs; }
+
 
     // --- Getters / Setters ---
 

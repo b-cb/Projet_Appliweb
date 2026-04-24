@@ -281,7 +281,9 @@ export default function TarotGamePage() {
                     className={`joueur-info-tarot ${estActif ? 'joueur-actif-tarot' : ''}`}
                     style={seatStyle}
                   >
-                    <span className="joueur-nom">{j.pseudo} ({j.scorePartie ?? 0} pts)</span>
+                    <span className="joueur-nom">
+                      {j.pseudo} ({(etatJeu.scoresJoueurs?.[j.id] ?? j.scorePartie ?? 0)} pts)
+                    </span>
                     {estActif && <span className="tour-indicator-mini">▶</span>}
                   </div>
                 )

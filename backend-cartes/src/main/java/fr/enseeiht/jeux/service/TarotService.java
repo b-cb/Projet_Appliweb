@@ -212,6 +212,13 @@ public class TarotService {
         // Poignée
         dto.setPoigneeDeclaree(partie.getPoigneeDeclaree());
 
+        // Scores individuels : map joueurId → scorePartie pour le frontend
+        java.util.Map<Long, Integer> scoresMap = new java.util.HashMap<>();
+        for (Joueur j : joueurs) {
+            scoresMap.put(j.getId(), j.getScorePartie());
+        }
+        dto.setScoresJoueurs(scoresMap);
+
         // Résultat si terminée
         if ("TERMINEE".equals(partie.getStatut())) {
             dto.setResultat(buildResultatTarot(partie, joueurs));

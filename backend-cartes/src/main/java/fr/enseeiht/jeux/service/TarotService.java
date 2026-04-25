@@ -269,6 +269,8 @@ public class TarotService {
 
             // Si tous les joueurs ont passé sans contrat → redémarrer la donne
             if (partie.getPassesConsecutives() >= nbJoueurs) {
+                // Avancer le compteur de donne pour que le premier joueur tourne
+                partie.setDonneActuelle(partie.getDonneActuelle() + 1);
                 redemarrerDonneTarot(partie, joueurs);
                 partieRepository.save(partie);
                 List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);

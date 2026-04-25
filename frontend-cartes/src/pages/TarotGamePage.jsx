@@ -48,7 +48,7 @@ const SEAT_POSITIONS = {
 function MiniCarteTarot({ cp }) {
   return (
     <div className="pli-carte-item">
-      <CardImage carte={cp.carte} largeur={63} />
+      <CardImage carte={cp.carte} largeur={85} />
       <div className="mini-carte-pseudo">{cp.pseudo}</div>
     </div>
   )

@@ -1,0 +1,43 @@
+-- 1. On vole 5 Atouts au joueur 40 pour vous les donner (39)
+UPDATE JOUEUR_CARTE 
+SET JOUEUR_ID = 39 
+WHERE CARTE_ID IN (
+    SELECT jc.CARTE_ID 
+    FROM JOUEUR_CARTE jc
+    JOIN CARTE c ON jc.CARTE_ID = c.ID
+    WHERE c.COULEUR = 'Atout' AND jc.JOUEUR_ID = 40
+    LIMIT 5
+);
+
+-- 2. On rend 5 de vos cartes normales (39) au joueur 40 pour compenser
+UPDATE JOUEUR_CARTE 
+SET JOUEUR_ID = 40 
+WHERE CARTE_ID IN (
+    SELECT jc.CARTE_ID 
+    FROM JOUEUR_CARTE jc
+    JOIN CARTE c ON jc.CARTE_ID = c.ID
+    WHERE jc.JOUEUR_ID = 39 AND c.COULEUR != 'Atout'
+    LIMIT 5
+);
+
+-- 3. On vole 5 Atouts au joueur 41 pour vous les donner (39)
+UPDATE JOUEUR_CARTE 
+SET JOUEUR_ID = 39 
+WHERE CARTE_ID IN (
+    SELECT jc.CARTE_ID 
+    FROM JOUEUR_CARTE jc
+    JOIN CARTE c ON jc.CARTE_ID = c.ID
+    WHERE c.COULEUR = 'Atout' AND jc.JOUEUR_ID = 41
+    LIMIT 5
+);
+
+-- 4. On rend 5 de vos cartes normales (39) au joueur 41 pour compenser
+UPDATE JOUEUR_CARTE 
+SET JOUEUR_ID = 41 
+WHERE CARTE_ID IN (
+    SELECT jc.CARTE_ID 
+    FROM JOUEUR_CARTE jc
+    JOIN CARTE c ON jc.CARTE_ID = c.ID
+    WHERE jc.JOUEUR_ID = 39 AND c.COULEUR != 'Atout'
+    LIMIT 5
+);

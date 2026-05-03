@@ -191,6 +191,13 @@ export async function declarePoigneeTarot(token, partieId, utilisateurId, type) 
   return { ok: res.ok, data: await res.json().catch(() => null) }
 }
 
+export async function signalerPetitSecTarot(token, partieId, utilisateurId) {
+  const res = await fetch(`${BASE}/partie/${partieId}/tarot/petit-sec?utilisateurId=${utilisateurId}`, {
+    method: 'POST', headers: headers(token)
+  })
+  return { ok: res.ok, data: await res.json().catch(() => null) }
+}
+
 export async function coincher(token, partieId, utilisateurId, surcoinche = false) {
   const url = `${BASE}/partie/${partieId}/coincher?utilisateurId=${utilisateurId}${surcoinche ? '&surcoinche=true' : ''}`
   const res = await fetch(url, { method: 'POST', headers: headers(token) })

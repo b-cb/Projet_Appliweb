@@ -13,6 +13,9 @@ import ChienPanel from '../components/ChienPanel'
 import RoiSelector from '../components/RoiSelector'
 import ChatPanel from '../components/ChatPanel'
 
+// Nombre max de plis selon le nombre de joueurs (3j=24, 4j=18, 5j=15)
+const MAX_PLIS = { 3: 24, 4: 18, 5: 15 }
+
 const SUIT_SYMBOLS = { Coeur: '♥', Carreau: '♦', Trefle: '♣', Pique: '♠', Atout: '★' }
 const BID_LABELS = { PETITE: 'Petite', GARDE: 'Garde', GARDE_SANS: 'Garde sans', GARDE_CONTRE: 'Garde contre' }
 
@@ -175,6 +178,19 @@ export default function TarotGamePage() {
   }
 
   const handleJouerCarte = async (carteId) => {
+    // Avertir si l'Excuse est jouée au dernier pli (risque de la perdre)
+    const nbJoueurs = joueurs.length || 4
+    const maxPlis = MAX_PLIS[nbJoueurs] || 18
+    const estDernierPli = etatJeu.numPliCourant === maxPlis
+    const carteChoisie = etatJeu.maMain?.find(c => c.id === carteId)
+    if (estDernierPli && carteChoisie?.valeur === 'Excuse' && carteChoisie?.couleur === 'Atout') {
+      const ok = window.confirm(
+        '⚠️ Attention : vous jouez l\'Excuse au dernier pli.\n' +
+        'Si votre équipe perd ce pli, l\'Excuse sera perdue et ira à l\'adversaire.\n\n' +
+        'Voulez-vous quand même la jouer ?'
+      )
+      if (!ok) return
+    }
     const { ok, data } = await api.jouerCarteTarot(token, partieId, utilisateur.id, carteId)
     if (ok) setEtatJeu(data)
     else afficherFlash(data?.erreur || 'Impossible de jouer cette carte.')
@@ -188,6 +204,12 @@ export default function TarotGamePage() {
     const { ok, data } = await api.declarePoigneeTarot(token, partieId, utilisateur.id, type)
     if (ok) setEtatJeu(data)
     else afficherFlash(data?.erreur || 'Impossible de déclarer la Poignée.')
+  }
+
+  const handlePetitSec = async () => {
+    const { ok, data } = await api.signalerPetitSecTarot(token, partieId, utilisateur.id)
+    if (ok) { setEtatJeu(data); afficherFlash('🔄 Petit sec signalé — nouvelle donne !') }
+    else afficherFlash(data?.erreur || 'Impossible de signaler un Petit sec.')
   }
 
   const retourLobby = () => { deconnecter(); navigate('/lobby') }
@@ -337,6 +359,24 @@ export default function TarotGamePage() {
           {/* Overlay : chien / écart */}
           {statut === 'EN_ENCHERE' && (phase === 'CHIEN' || phase === 'CHIEN_VU') && (
             <ChienPanel etatJeu={etatJeu} onEcarter={handleEcarter} />
+          )}
+
+          {/* Bandeau Petit sec */}
+          {statut === 'EN_ENCHERE' && phase == null && etatJeu.petitSecDetecte && (
+            <div style={{
+              position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)',
+              background: 'rgba(180,60,0,0.85)', borderRadius: 10, padding: '8px 16px',
+              display: 'flex', gap: 12, alignItems: 'center', zIndex: 20, flexWrap: 'wrap'
+            }}>
+              <span style={{ color: '#fff', fontSize: '0.9rem' }}>⚠️ Petit sec détecté dans cette donne !</span>
+              {etatJeu.monPetitEstSec && (
+                <button className="btn-small btn-invite"
+                  onClick={handlePetitSec}
+                  title="Vous avez le Petit comme seul atout">
+                  Annuler la donne (Petit sec)
+                </button>
+              )}
+            </div>
           )}
 
           {/* Overlay : Poignée (preneur peut déclarer avant le 1er pli) */}

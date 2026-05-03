@@ -267,4 +267,10 @@ public class Partie {
     public int getScoreGlobalB() { return scoreGlobalB; }
     public void setScoreGlobalB(int scoreGlobalB) { this.scoreGlobalB = scoreGlobalB; }
 
+    // Tarot : vrai si un joueur a le Petit sec après la distribution (peut annuler la donne)
+    private boolean petitSecDetecte;
+
+    public boolean isPetitSecDetecte() { return petitSecDetecte; }
+    public void setPetitSecDetecte(boolean petitSecDetecte) { this.petitSecDetecte = petitSecDetecte; }
+
 }

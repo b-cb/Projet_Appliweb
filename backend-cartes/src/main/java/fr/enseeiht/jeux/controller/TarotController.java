@@ -87,4 +87,15 @@ public class TarotController {
         String type = body.get("type");
         return ResponseEntity.ok(tarotService.declarePoignee(id, utilisateurId, type));
     }
+
+    /**
+     * POST signaler un Petit sec (Atout 1 = seul atout en main) → annulation de la donne.
+     * Disponible uniquement en phase EN_ENCHERE avant les enchères.
+     */
+    @PostMapping("/petit-sec")
+    public ResponseEntity<EtatJeuTarotDTO> signalerPetitSec(
+            @PathVariable Long id,
+            @RequestParam Long utilisateurId) {
+        return ResponseEntity.ok(tarotService.signalerPetitSec(id, utilisateurId));
+    }
 }

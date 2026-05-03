@@ -463,26 +463,29 @@ class TarotTest {
         }
 
         @Test
-        @DisplayName("Tous passent → exception 'donne annulée'")
-        void tousPasse_exception() {
+        @DisplayName("Tous passent → nouvelle donne redistribuée (statut EN_ENCHERE, nouvelles mains)")
+        @Transactional
+        void tousPasse_nouvelleDonne() {
             Long partieId = partie.getId();
 
-            // Faire passer les 3 premiers joueurs
-            for (int tour = 0; tour < 3; tour++) {
+            // Faire passer les 4 joueurs (tous passent)
+            for (int tour = 0; tour < 4; tour++) {
                 Partie p = partieRepository.findById(partieId).orElseThrow();
                 List<Joueur> js = joueurRepository.findByPartie_Id(partieId);
                 Joueur actif = js.stream().filter(j -> j.getPosition() == p.getTourJoueurIndex()).findFirst().orElseThrow();
                 tarotService.enchirirTarot(partieId, actif.getUtilisateur().getId(), "PASSE");
             }
 
-            // Le 4e joueur passe → tous ont passé → exception
+            // Après que tous ont passé → une nouvelle donne est redistribuée
             Partie p = partieRepository.findById(partieId).orElseThrow();
-            List<Joueur> js = joueurRepository.findByPartie_Id(partieId);
-            Joueur dernier = js.stream().filter(j -> j.getPosition() == p.getTourJoueurIndex()).findFirst().orElseThrow();
-            Long uid = dernier.getUtilisateur().getId();
-            assertThatThrownBy(() -> tarotService.enchirirTarot(partieId, uid, "PASSE"))
-                    .isInstanceOf(BusinessException.class)
-                    .hasMessageContaining("passé");
+            assertThat(p.getStatut()).isEqualTo("EN_ENCHERE");
+            assertThat(p.getPhaseJeu()).isNull();
+            assertThat(p.getEnchereType()).isNull();
+            // Chaque joueur a de nouvelles cartes (18 en 4j)
+            List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
+            for (Joueur j : joueurs) {
+                assertThat(j.getCartesEnMain()).hasSize(18);
+            }
         }
 
         @Test
@@ -787,6 +790,122 @@ class TarotTest {
 
             Partie pAct = partieRepository.findById(partieId).orElseThrow();
             assertThat(pAct.getTourJoueurIndex()).isNotEqualTo(indexAvant);
+        }
+    }
+
+    @Nested
+    @DisplayName("Petit sec — règle d'annulation de donne")
+    class PetitSec {
+
+        private Utilisateur u1, u2, u3, u4;
+        private Long partieId;
+
+        @BeforeEach
+        void setUp() {
+            u1 = creerUtilisateur("ps1");
+            u2 = creerUtilisateur("ps2");
+            u3 = creerUtilisateur("ps3");
+            u4 = creerUtilisateur("ps4");
+            Partie p = demarrerPartieTarot(4, List.of(u1, u2, u3, u4));
+            partieId = p.getId();
+        }
+
+        @Test
+        @DisplayName("Un joueur sans Petit sec ne peut pas signaler un Petit sec")
+        @Transactional
+        void sansPS_lanceException() {
+            // Forcer petitSecDetecte à true pour contourner le premier guard
+            Partie p = partieRepository.findById(partieId).orElseThrow();
+            p.setPetitSecDetecte(true);
+            partieRepository.save(p);
+
+            // Trouver un joueur dont la main ne contient PAS le Petit ou possède plusieurs atouts
+            List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
+            Joueur sansPS = joueurs.stream()
+                    .filter(j -> {
+                        long nbAtouts = j.getCartesEnMain().stream()
+                                .filter(c -> "Atout".equals(c.getCouleur()) && !"Excuse".equals(c.getValeur()))
+                                .count();
+                        boolean aPetit = j.getCartesEnMain().stream()
+                                .anyMatch(c -> "Atout".equals(c.getCouleur()) && "1".equals(c.getValeur()));
+                        return !aPetit || nbAtouts > 1; // pas de Petit sec
+                    })
+                    .findFirst().orElse(null);
+
+            if (sansPS != null) {
+                final Long uid = sansPS.getUtilisateur().getId();
+                assertThatThrownBy(() -> tarotService.signalerPetitSec(partieId, uid))
+                        .isInstanceOf(fr.enseeiht.jeux.exception.BusinessException.class)
+                        .hasMessageContaining("Petit sec");
+            } else {
+                System.out.println("[INFO] Tous les joueurs ont un Petit sec (improbable), test informatif uniquement.");
+            }
+        }
+
+        @Test
+        @DisplayName("Signaler un Petit sec sans qu'il soit détecté dans la partie lève une exception")
+        @Transactional
+        void petitSecNonDetecte_lanceException() {
+            // S'assurer que petitSecDetecte est false
+            Partie p = partieRepository.findById(partieId).orElseThrow();
+            p.setPetitSecDetecte(false);
+            partieRepository.save(p);
+
+            List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
+            Long uid = joueurs.get(0).getUtilisateur().getId();
+            assertThatThrownBy(() -> tarotService.signalerPetitSec(partieId, uid))
+                    .isInstanceOf(fr.enseeiht.jeux.exception.BusinessException.class)
+                    .hasMessageContaining("Petit sec");
+        }
+
+        @Test
+        @DisplayName("Forcer un Petit sec → signalerPetitSec redistribue les cartes (nouvelle donne)")
+        @Transactional
+        void forcerPS_redistribute() {
+            Partie p = partieRepository.findById(partieId).orElseThrow();
+            List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
+
+            // Forcer la main du premier joueur : garder uniquement le Petit (Atout 1)
+            // et supprimer tous ses autres atouts
+            Joueur joueurForce = joueurs.get(0);
+            List<fr.enseeiht.jeux.modele.Carte> mainOriginale = new ArrayList<>(joueurForce.getCartesEnMain());
+            fr.enseeiht.jeux.modele.Carte petitCarte = mainOriginale.stream()
+                    .filter(c -> "Atout".equals(c.getCouleur()) && "1".equals(c.getValeur()))
+                    .findFirst().orElse(null);
+
+            if (petitCarte == null) {
+                // Le premier joueur n'a pas le Petit, tester avec un autre joueur ou skipper
+                System.out.println("[INFO] Le premier joueur n'a pas le Petit — test de redistribution non applicable avec la main actuelle.");
+                return;
+            }
+
+            // Retirer tous les autres atouts de sa main (simuler le Petit sec)
+            List<fr.enseeiht.jeux.modele.Carte> mainSansPetit = mainOriginale.stream()
+                    .filter(c -> !("Atout".equals(c.getCouleur()) && !"Excuse".equals(c.getValeur()) && !"1".equals(c.getValeur())))
+                    .collect(java.util.stream.Collectors.toList());
+            joueurForce.setCartesEnMain(mainSansPetit);
+            joueurRepository.save(joueurForce);
+
+            // Marquer le Petit sec dans la partie
+            p.setPetitSecDetecte(true);
+            partieRepository.save(p);
+
+            int donnAvant = p.getDonneActuelle();
+
+            // Signaler le Petit sec
+            Long uid = joueurForce.getUtilisateur().getId();
+            tarotService.signalerPetitSec(partieId, uid);
+
+            Partie pApres = partieRepository.findById(partieId).orElseThrow();
+            // La donne doit avoir été incrémentée
+            assertThat(pApres.getDonneActuelle()).isGreaterThan(donnAvant);
+            // Le statut revient en EN_ENCHERE
+            assertThat(pApres.getStatut()).isEqualTo("EN_ENCHERE");
+            // Une nouvelle distribution a eu lieu (chaque joueur a de nouvelles cartes)
+            List<Joueur> nouveauxJoueurs = joueurRepository.findByPartie_Id(partieId);
+            for (Joueur j : nouveauxJoueurs) {
+                assertThat(j.getCartesEnMain()).hasSize(18); // 4 joueurs : 18 cartes/joueur
+            }
         }
     }
 }

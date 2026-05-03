@@ -212,6 +212,18 @@ public class TarotService {
         // Poignée
         dto.setPoigneeDeclaree(partie.getPoigneeDeclaree());
 
+        // Petit sec
+        dto.setPetitSecDetecte(partie.isPetitSecDetecte());
+        if (partie.isPetitSecDetecte()) {
+            // Indiquer si C'EST ce joueur qui a le petit sec
+            boolean monPetitSec = monJoueur.getCartesEnMain().stream()
+                    .anyMatch(c -> "Atout".equals(c.getCouleur()) && "1".equals(c.getValeur()))
+                    && monJoueur.getCartesEnMain().stream()
+                            .filter(c -> "Atout".equals(c.getCouleur()) && !"Excuse".equals(c.getValeur()))
+                            .count() == 1;
+            dto.setMonPetitEstSec(monPetitSec);
+        }
+
         // Scores individuels : map joueurId → scorePartie pour le frontend
         java.util.Map<Long, Integer> scoresMap = new java.util.HashMap<>();
         for (Joueur j : joueurs) {
@@ -275,6 +287,11 @@ public class TarotService {
                 partieRepository.save(partie);
                 List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);
                 pushEtatTarotATous(partieId, joueursActualises, EvenementJeuDTO.Type.ENCHERE);
+                // Déclencher le bot pour la nouvelle donne (AVANT le return !)
+                final Long partieIdFinal2 = partieId;
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override public void afterCommit() { tarotBotService.jouerSiTourDuBot(partieIdFinal2); }
+                });
                 return getEtatJeuTarot(partieId, utilisateurId);
             }
 
@@ -1161,6 +1178,68 @@ public class TarotService {
     }
 
     // =========================================================
+    // PETIT SEC
+    // =========================================================
+
+    /**
+     * Permet à un joueur de signaler qu'il a le Petit sec (Atout 1 = seul atout en main)
+     * avant le début des enchères. Dans ce cas, la donne est annulée et redistribuée.
+     * Cette action n'est disponible que si :
+     *  - La partie est en statut EN_ENCHERE sans phase (début de donne)
+     *  - petitSecDetecte est vrai
+     *  - Le joueur qui signale a bien le Petit comme seul atout
+     */
+    public EtatJeuTarotDTO signalerPetitSec(Long partieId, Long utilisateurId) {
+        Partie partie = partieRepository.findById(partieId)
+                .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
+
+        if (!"EN_ENCHERE".equals(partie.getStatut()) || partie.getPhaseJeu() != null) {
+            throw new BusinessException("Le Petit sec ne peut être signalé qu'avant les enchères.");
+        }
+        if (!partie.isPetitSecDetecte()) {
+            throw new BusinessException("Aucun Petit sec détecté dans cette donne.");
+        }
+
+        List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
+        Joueur monJoueur = joueurs.stream()
+                .filter(j -> j.getUtilisateur().getId().equals(utilisateurId))
+                .findFirst()
+                .orElseThrow(() -> new BusinessException("Vous n'êtes pas dans cette partie."));
+
+        if (!hasPetitSec(monJoueur)) {
+            throw new BusinessException("Vous n'avez pas de Petit sec.");
+        }
+
+        // Annuler la donne et redistribuer
+        partie.setDonneActuelle(partie.getDonneActuelle() + 1);
+        redemarrerDonneTarot(partie, joueurs);
+        partieRepository.save(partie);
+
+        List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);
+        pushEtatTarotATous(partieId, joueursActualises, EvenementJeuDTO.Type.ENCHERE);
+
+        final Long partieIdFinal = partieId;
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override public void afterCommit() { tarotBotService.jouerSiTourDuBot(partieIdFinal); }
+        });
+
+        return getEtatJeuTarot(partieId, utilisateurId);
+    }
+
+    /**
+     * Retourne true si le joueur a le Petit (Atout 1) comme seul atout non-Excuse en main.
+     */
+    private boolean hasPetitSec(Joueur joueur) {
+        List<Carte> main = joueur.getCartesEnMain();
+        boolean aPetit = main.stream().anyMatch(c -> "Atout".equals(c.getCouleur()) && "1".equals(c.getValeur()));
+        if (!aPetit) return false;
+        long nbAtouts = main.stream()
+                .filter(c -> "Atout".equals(c.getCouleur()) && !"Excuse".equals(c.getValeur()))
+                .count();
+        return nbAtouts == 1;
+    }
+
+    // =========================================================
     // POIGNÉE
     // =========================================================
 
@@ -1273,10 +1352,24 @@ public class TarotService {
         partie.setScoreB(0);
         partie.setPoigneeDeclaree(null);
         partie.setPetitAuBoutPreneur(false);
+        partie.setPetitSecDetecte(false);
         // Le premier joueur tourne d'une position à chaque donne (3j, 4j ou 5j)
         int premierJoueur = (partie.getDonneActuelle() - 1) % nbJoueurs;
         partie.setTourJoueurIndex(premierJoueur);
         // Ne PAS réinitialiser : donneActuelle, maxDonnes, maxPoints, scoreGlobalA/B
+
+        // Détecter si un joueur a le Petit sec après la distribution
+        boolean petitSecTrouve = false;
+        for (Joueur j : joueurs) {
+            // Récharger le joueur depuis la BDD pour avoir sa main à jour
+            Joueur jFrais = joueurRepository.findById(j.getId()).orElse(j);
+            if (hasPetitSec(jFrais)) {
+                petitSecTrouve = true;
+                break;
+            }
+        }
+        partie.setPetitSecDetecte(petitSecTrouve);
+
         partieRepository.save(partie);
     }
 }

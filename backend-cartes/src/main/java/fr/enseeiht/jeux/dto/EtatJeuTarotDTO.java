@@ -66,6 +66,10 @@ public class EtatJeuTarotDTO {
     // Poignée
     private String poigneeDeclaree;
 
+    // Petit sec : un joueur détient le Petit comme seul atout (peut annuler la donne)
+    private boolean petitSecDetecte;  // visible par tous (alerte générale)
+    private boolean monPetitEstSec;   // true uniquement pour le joueur concerné
+
     // Scores individuels par joueur (joueurId → scorePartie), mis à jour à chaque donne
     private Map<Long, Integer> scoresJoueurs;
 
@@ -172,6 +176,12 @@ public class EtatJeuTarotDTO {
 
     public String getPoigneeDeclaree() { return poigneeDeclaree; }
     public void setPoigneeDeclaree(String poigneeDeclaree) { this.poigneeDeclaree = poigneeDeclaree; }
+
+    public boolean isPetitSecDetecte() { return petitSecDetecte; }
+    public void setPetitSecDetecte(boolean petitSecDetecte) { this.petitSecDetecte = petitSecDetecte; }
+
+    public boolean isMonPetitEstSec() { return monPetitEstSec; }
+    public void setMonPetitEstSec(boolean monPetitEstSec) { this.monPetitEstSec = monPetitEstSec; }
 
     // --- Inner DTOs ---
 

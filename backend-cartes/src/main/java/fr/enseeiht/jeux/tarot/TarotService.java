@@ -1,6 +1,7 @@
-package fr.enseeiht.jeux.service;
+package fr.enseeiht.jeux.tarot;
 
 import fr.enseeiht.jeux.dto.*;
+import fr.enseeiht.jeux.tarot.EtatTarotDTO;
 import fr.enseeiht.jeux.exception.BusinessException;
 import fr.enseeiht.jeux.exception.ResourceNotFoundException;
 import fr.enseeiht.jeux.modele.*;
@@ -78,7 +79,7 @@ public class TarotService {
     // ÉTAT DU JEU
     // =========================================================
 
-    public EtatJeuTarotDTO getEtatJeuTarot(Long partieId, Long utilisateurId) {
+    public EtatTarotDTO getEtatJeuTarot(Long partieId, Long utilisateurId) {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
 
@@ -90,7 +91,7 @@ public class TarotService {
                 .findFirst()
                 .orElseThrow(() -> new BusinessException("Vous n'êtes pas dans cette partie."));
 
-        EtatJeuTarotDTO dto = new EtatJeuTarotDTO();
+        EtatTarotDTO dto = new EtatTarotDTO();
         dto.setPartieId(partieId);
         dto.setStatut(partie.getStatut());
         dto.setPhaseJeu(partie.getPhaseJeu());
@@ -148,13 +149,13 @@ public class TarotService {
             Pli pli = pliOpt.get();
             List<Carte> cartesJouees = pli.getCartesJouees();
             int ouvreurIndex = pli.getJoueurOuvreurIndex();
-            List<EtatJeuTarotDTO.CartePliDTO> pliCourant = new ArrayList<>();
+            List<EtatTarotDTO.CartePliDTO> pliCourant = new ArrayList<>();
             for (int i = 0; i < cartesJouees.size(); i++) {
                 int idx = (ouvreurIndex + i) % nbJoueurs;
                 final int idxFinal = idx;
                 Joueur j = joueurs.stream().filter(jj -> jj.getPosition() == idxFinal).findFirst().orElse(null);
                 if (j != null) {
-                    pliCourant.add(new EtatJeuTarotDTO.CartePliDTO(
+                    pliCourant.add(new EtatTarotDTO.CartePliDTO(
                             CarteDTO.fromEntity(cartesJouees.get(i)),
                             j.getUtilisateur().getPseudo(),
                             j.getEquipe()
@@ -175,13 +176,13 @@ public class TarotService {
                 Pli dp = dernierOpt.get();
                 List<Carte> dpCartes = dp.getCartesJouees();
                 int dpOuvreur = dp.getJoueurOuvreurIndex();
-                List<EtatJeuTarotDTO.CartePliDTO> dernierPliList = new ArrayList<>();
+                List<EtatTarotDTO.CartePliDTO> dernierPliList = new ArrayList<>();
                 for (int i = 0; i < dpCartes.size(); i++) {
                     int idx = (dpOuvreur + i) % nbJoueurs;
                     final int idxFinal = idx;
                     Joueur j = joueurs.stream().filter(jj -> jj.getPosition() == idxFinal).findFirst().orElse(null);
                     if (j != null) {
-                        dernierPliList.add(new EtatJeuTarotDTO.CartePliDTO(
+                        dernierPliList.add(new EtatTarotDTO.CartePliDTO(
                                 CarteDTO.fromEntity(dpCartes.get(i)),
                                 j.getUtilisateur().getPseudo(),
                                 j.getEquipe()
@@ -243,7 +244,7 @@ public class TarotService {
     // ENCHÈRES TAROT
     // =========================================================
 
-    public EtatJeuTarotDTO enchirirTarot(Long partieId, Long utilisateurId, String typeBid) {
+    public EtatTarotDTO enchirirTarot(Long partieId, Long utilisateurId, String typeBid) {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
 
@@ -419,7 +420,7 @@ public class TarotService {
      *
      * @param couleur "Coeur"|"Carreau"|"Trefle"|"Pique"
      */
-    public EtatJeuTarotDTO appelerRoi(Long partieId, Long utilisateurId, String couleur) {
+    public EtatTarotDTO appelerRoi(Long partieId, Long utilisateurId, String couleur) {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
 
@@ -485,7 +486,7 @@ public class TarotService {
      * Le preneur écarte des cartes après avoir pris le chien (PETITE/GARDE).
      * Pour GARDE_SANS, appeler avec une liste vide (confirme la vue).
      */
-    public EtatJeuTarotDTO ecarterCartes(Long partieId, Long utilisateurId, List<Long> carteIds) {
+    public EtatTarotDTO ecarterCartes(Long partieId, Long utilisateurId, List<Long> carteIds) {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
 
@@ -566,7 +567,7 @@ public class TarotService {
     // JOUER UNE CARTE
     // =========================================================
 
-    public EtatJeuTarotDTO jouerCarte(Long partieId, Long utilisateurId, Long carteId) {
+    public EtatTarotDTO jouerCarte(Long partieId, Long utilisateurId, Long carteId) {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
 
@@ -1046,7 +1047,7 @@ public class TarotService {
 
     private void pushEtatTarotATous(Long partieId, List<Joueur> joueurs, EvenementJeuDTO.Type type) {
         for (Joueur j : joueurs) {
-            EtatJeuTarotDTO etat = getEtatJeuTarot(partieId, j.getUtilisateur().getId());
+            EtatTarotDTO etat = getEtatJeuTarot(partieId, j.getUtilisateur().getId());
             messagingTemplate.convertAndSend(
                     "/topic/partie/" + partieId + "/joueur/" + j.getUtilisateur().getId(),
                     EvenementJeuDTO.of(type, etat)
@@ -1131,8 +1132,8 @@ public class TarotService {
         return correction;
     }
 
-    private EtatJeuTarotDTO.ResultatTarotDTO buildResultatTarot(Partie partie, List<Joueur> joueurs) {
-        EtatJeuTarotDTO.ResultatTarotDTO r = new EtatJeuTarotDTO.ResultatTarotDTO();
+    private EtatTarotDTO.ResultatTarotDTO buildResultatTarot(Partie partie, List<Joueur> joueurs) {
+        EtatTarotDTO.ResultatTarotDTO r = new EtatTarotDTO.ResultatTarotDTO();
         r.setEnchereType(partie.getEnchereType());
         r.setMultiplicateur(partie.getMultiplicateur());
 
@@ -1189,7 +1190,7 @@ public class TarotService {
      *  - petitSecDetecte est vrai
      *  - Le joueur qui signale a bien le Petit comme seul atout
      */
-    public EtatJeuTarotDTO signalerPetitSec(Long partieId, Long utilisateurId) {
+    public EtatTarotDTO signalerPetitSec(Long partieId, Long utilisateurId) {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
 
@@ -1247,7 +1248,7 @@ public class TarotService {
      * Le preneur déclare une Poignée avant de jouer sa première carte.
      * "SIMPLE"|"DOUBLE"|"TRIPLE"
      */
-    public EtatJeuTarotDTO declarePoignee(Long partieId, Long utilisateurId, String typePoignee) {
+    public EtatTarotDTO declarePoignee(Long partieId, Long utilisateurId, String typePoignee) {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new fr.enseeiht.jeux.exception.ResourceNotFoundException("Partie introuvable."));
 

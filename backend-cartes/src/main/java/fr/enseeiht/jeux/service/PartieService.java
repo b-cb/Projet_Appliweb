@@ -1,11 +1,14 @@
 package fr.enseeiht.jeux.service;
 
+import fr.enseeiht.jeux.coinche.CoincheBotService;
+import fr.enseeiht.jeux.coinche.CoincheService;
 import fr.enseeiht.jeux.config.BotInitializer;
 import fr.enseeiht.jeux.dto.*;
 import fr.enseeiht.jeux.exception.BusinessException;
 import fr.enseeiht.jeux.exception.ResourceNotFoundException;
 import fr.enseeiht.jeux.modele.*;
 import fr.enseeiht.jeux.repository.*;
+import fr.enseeiht.jeux.tarot.TarotService;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
@@ -20,8 +23,8 @@ public class PartieService {
     private final UtilisateurRepository utilisateurRepository;
     private final CarteRepository carteRepository;
     private final SimpMessagingTemplate messagingTemplate;
-    private final JeuService jeuService;
-    private final BotService botService;
+    private final CoincheService jeuService;
+    private final CoincheBotService botService;
     private final TarotService tarotService;
 
     public PartieService(PartieRepository partieRepository,
@@ -29,8 +32,8 @@ public class PartieService {
                          UtilisateurRepository utilisateurRepository,
                          CarteRepository carteRepository,
                          SimpMessagingTemplate messagingTemplate,
-                         JeuService jeuService,
-                         @Lazy BotService botService,
+                         CoincheService jeuService,
+                         @Lazy CoincheBotService botService,
                          @Lazy TarotService tarotService) {
         this.partieRepository = partieRepository;
         this.joueurRepository = joueurRepository;
@@ -189,7 +192,7 @@ public class PartieService {
         // Push WebSocket personnalisé par joueur
         List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);
         for (Joueur j : joueursActualises) {
-            EtatJeuDTO etat = jeuService.getEtatJeu(partieId, j.getUtilisateur().getId());
+            EtatCoincheDTO etat = jeuService.getEtatJeu(partieId, j.getUtilisateur().getId());
             messagingTemplate.convertAndSend(
                     "/topic/partie/" + partieId + "/joueur/" + j.getUtilisateur().getId(),
                     EvenementJeuDTO.of(EvenementJeuDTO.Type.ENCHERE, etat)
@@ -328,7 +331,7 @@ public class PartieService {
         // Push WebSocket
         List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);
         for (Joueur j : joueursActualises) {
-            fr.enseeiht.jeux.dto.EtatJeuTarotDTO etat = tarotService.getEtatJeuTarot(partieId, j.getUtilisateur().getId());
+            fr.enseeiht.jeux.tarot.EtatTarotDTO etat = tarotService.getEtatJeuTarot(partieId, j.getUtilisateur().getId());
             messagingTemplate.convertAndSend(
                     "/topic/partie/" + partieId + "/joueur/" + j.getUtilisateur().getId(),
                     fr.enseeiht.jeux.dto.EvenementJeuDTO.of(fr.enseeiht.jeux.dto.EvenementJeuDTO.Type.ENCHERE, etat)
@@ -398,7 +401,7 @@ public class PartieService {
         // Push WebSocket : tous les joueurs reçoivent le nouvel état
         List<Joueur> joueursActualisesPost = joueurRepository.findByPartie_Id(partieId);
         for (Joueur j : joueursActualisesPost) {
-            EtatJeuDTO etat = jeuService.getEtatJeu(partieId, j.getUtilisateur().getId());
+            EtatCoincheDTO etat = jeuService.getEtatJeu(partieId, j.getUtilisateur().getId());
             messagingTemplate.convertAndSend(
                     "/topic/partie/" + partieId + "/joueur/" + j.getUtilisateur().getId(),
                     EvenementJeuDTO.of(EvenementJeuDTO.Type.ENCHERE, etat)

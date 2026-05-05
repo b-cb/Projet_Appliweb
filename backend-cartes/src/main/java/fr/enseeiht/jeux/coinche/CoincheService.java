@@ -82,6 +82,10 @@ public class CoincheService {
     private final CoincheBotService botService;
     private final CarteRepository carteRepository;
 
+    private final CoincheEtatService coincheEtatService;
+    private final CoincheEnchereService coincheEnchereService;
+    private final CoincheReglesService coincheReglesService;
+
     public CoincheService(PartieRepository partieRepository,
             JoueurRepository joueurRepository,
             UtilisateurRepository utilisateurRepository,
@@ -89,7 +93,10 @@ public class CoincheService {
             PliRepository pliRepository,
             SimpMessagingTemplate messagingTemplate,
             @Lazy CoincheBotService botService,
-            CarteRepository carteRepository) {
+            CarteRepository carteRepository,
+            CoincheEtatService coincheEtatService,
+            CoincheEnchereService coincheEnchereService,
+            CoincheReglesService coincheReglesService) {
         this.partieRepository = partieRepository;
         this.joueurRepository = joueurRepository;
         this.utilisateurRepository = utilisateurRepository;
@@ -98,6 +105,9 @@ public class CoincheService {
         this.messagingTemplate = messagingTemplate;
         this.botService = botService;
         this.carteRepository = carteRepository;
+        this.coincheEtatService = coincheEtatService;
+        this.coincheEnchereService = coincheEnchereService;
+        this.coincheReglesService = coincheReglesService;
     }
 
     /**
@@ -120,123 +130,7 @@ public class CoincheService {
     // =========================================================
 
     public EtatCoincheDTO getEtatJeu(Long partieId, Long utilisateurId) {
-        Partie partie = partieRepository.findById(partieId)
-                .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
-
-        List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
-
-        Joueur monJoueur = joueurs.stream()
-                .filter(j -> j.getUtilisateur().getId().equals(utilisateurId))
-                .findFirst()
-                .orElseThrow(() -> new BusinessException("Vous n'êtes pas dans cette partie."));
-
-        EtatCoincheDTO dto = new EtatCoincheDTO();
-        dto.setPartieId(partieId);
-        dto.setStatut(partie.getStatut());
-        dto.setAtout(partie.getAtout());
-        dto.setContratValeur(partie.getContratValeur());
-        dto.setContratCouleur(partie.getContratCouleur());
-        dto.setScoreA(partie.getScoreA());
-        dto.setScoreB(partie.getScoreB());
-        dto.setNumPliCourant(partie.getNumPliCourant());
-        dto.setMonJoueurId(monJoueur.getId());
-        dto.setMonEquipe(monJoueur.getEquipe());
-
-        // Ma main
-        dto.setMaMain(monJoueur.getCartesEnMain().stream()
-                .map(CarteDTO::fromEntity)
-                .collect(Collectors.toList()));
-
-        // Joueur dont c'est le tour
-        if (joueurs.size() == 4) {
-            Joueur joueurTour = joueurs.stream()
-                    .filter(j -> j.getPosition() == partie.getTourJoueurIndex())
-                    .findFirst().orElse(null);
-            if (joueurTour != null) {
-                dto.setTourJoueurId(joueurTour.getId());
-                dto.setTourPseudo(joueurTour.getUtilisateur().getPseudo());
-            }
-        }
-
-        // Pli courant
-        Optional<Pli> pliOpt = pliRepository.findByPartie_IdAndNumTour(partieId, partie.getNumPliCourant());
-        if (pliOpt.isPresent()) {
-            Pli pli = pliOpt.get();
-            List<Carte> cartesJouees = pli.getCartesJouees();
-            int ouvreurIndex = pli.getJoueurOuvreurIndex();
-            List<EtatCoincheDTO.CartePliDTO> pliCourant = new ArrayList<>();
-            for (int i = 0; i < cartesJouees.size(); i++) {
-                int idx = (ouvreurIndex + i) % 4;
-                Joueur j = joueurs.stream()
-                        .filter(jj -> jj.getPosition() == idx)
-                        .findFirst().orElse(null);
-                if (j != null) {
-                    pliCourant.add(new EtatCoincheDTO.CartePliDTO(
-                            CarteDTO.fromEntity(cartesJouees.get(i)),
-                            j.getUtilisateur().getPseudo(),
-                            j.getEquipe()));
-                }
-            }
-            dto.setPliCourant(pliCourant);
-        } else {
-            dto.setPliCourant(new ArrayList<>());
-        }
-
-        // Dernier pli terminé (pli précédent)
-        if (partie.getNumPliCourant() > 1 || "TERMINEE".equals(partie.getStatut())) {
-            int numDernier = "TERMINEE".equals(partie.getStatut())
-                    ? partie.getNumPliCourant()
-                    : partie.getNumPliCourant() - 1;
-            Optional<Pli> dernierOpt = pliRepository.findByPartie_IdAndNumTour(partieId, numDernier);
-            if (dernierOpt.isPresent()) {
-                Pli dp = dernierOpt.get();
-                List<Carte> dpCartes = dp.getCartesJouees();
-                int dpOuvreur = dp.getJoueurOuvreurIndex();
-                List<EtatCoincheDTO.CartePliDTO> dernierPliList = new ArrayList<>();
-                for (int i = 0; i < dpCartes.size(); i++) {
-                    int idx = (dpOuvreur + i) % 4;
-                    final int idxFinal = idx;
-                    Joueur j = joueurs.stream().filter(jj -> jj.getPosition() == idxFinal).findFirst().orElse(null);
-                    if (j != null) {
-                        dernierPliList.add(new EtatCoincheDTO.CartePliDTO(
-                                CarteDTO.fromEntity(dpCartes.get(i)),
-                                j.getUtilisateur().getPseudo(),
-                                j.getEquipe()));
-                    }
-                }
-                dto.setDernierPli(dernierPliList);
-                dto.setDernierPliGagnantEquipe(dp.getGagnantEquipe());
-            }
-        }
-
-        // Historique des enchères
-        dto.setEncheres(enchereRepository.findByPartie_IdOrderByIdAsc(partieId).stream()
-                .map(EnchereDTO::fromEntity)
-                .collect(Collectors.toList()));
-
-        // Multi-manche
-        dto.setDonneActuelle(partie.getDonneActuelle());
-        dto.setMaxDonnes(partie.getMaxDonnes());
-        dto.setMaxPoints(partie.getMaxPoints());
-        dto.setScoreGlobalA(partie.getScoreGlobalA());
-        dto.setScoreGlobalB(partie.getScoreGlobalB());
-
-        // Coinche/Surcoinche
-        dto.setCoinche(partie.getCoinche());
-        if (partie.getPreneurId() != null) {
-            dto.setPreneurId(partie.getPreneurId());
-            joueurs.stream()
-                    .filter(j -> j.getId().equals(partie.getPreneurId()))
-                    .findFirst()
-                    .ifPresent(p -> dto.setPreneurEquipe(p.getEquipe()));
-        }
-
-        // Résultat si terminée
-        if ("TERMINEE".equals(partie.getStatut())) {
-            dto.setResultat(buildResultat(partie, joueurs));
-        }
-
-        return dto;
+        return coincheEtatService.getEtatJeu(partieId, utilisateurId);
     }
 
     // =========================================================
@@ -246,146 +140,26 @@ public class CoincheService {
     public EtatCoincheDTO encherir(Long partieId, Long utilisateurId, Integer contrat, String couleur, boolean passe) {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
-
-        if (!"EN_ENCHERE".equals(partie.getStatut())) {
-            throw new BusinessException("La partie n'est pas en phase d'enchères.");
-        }
-
         List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
-        Joueur joueurActif = joueurs.stream()
-                .filter(j -> j.getPosition() == partie.getTourJoueurIndex())
-                .findFirst()
+        Joueur joueurActif = joueurs.stream().filter(j -> j.getPosition() == partie.getTourJoueurIndex()).findFirst()
                 .orElseThrow(() -> new BusinessException("Joueur actif introuvable."));
-
         if (!joueurActif.getUtilisateur().getId().equals(utilisateurId)) {
             throw new BusinessException("Ce n'est pas votre tour d'enchérir.");
         }
 
-        // --- Cas : la donne est coinchée (enchères classiques interdites) ---
-        if (partie.getCoinche() == 1) {
-            if (!passe) {
-                throw new BusinessException("La donne est coinchée : vous ne pouvez que passer ou surcoincher.");
-            }
-            // Seule l'équipe du preneur peut parler après une coinche → vérifier que c'est
-            // bien le cas
-            Joueur preneur = joueurs.stream()
-                    .filter(j -> j.getId().equals(partie.getPreneurId()))
-                    .findFirst()
-                    .orElseThrow(() -> new BusinessException("Preneur introuvable."));
-            if (joueurActif.getEquipe() != preneur.getEquipe()) {
-                throw new BusinessException("Après une coinche, seule l'équipe du preneur peut passer ou surcoincher.");
-            }
-
-            // Enregistrer le passe
-            Enchere e = new Enchere();
-            e.setPartie(partie);
-            e.setPreneur(joueurActif);
-            e.setPasse(true);
-            e.setContrat(0);
-            enchereRepository.save(e);
-            partie.setPassesConsecutives(partie.getPassesConsecutives() + 1);
-
-            // Après 2 passes de l'équipe preneure → fin des enchères, EN_JEU avec ×2
-            if (partie.getPassesConsecutives() >= 2) {
-                demarrerJeuDepuisEnchere(partie);
-            } else {
-                // Passer à l'autre joueur de l'équipe du preneur
-                partie.setTourJoueurIndex((partie.getTourJoueurIndex() + 2) % 4);
-            }
-
-            partieRepository.save(partie);
-            EvenementJeuDTO.Type typeEvt = "EN_JEU".equals(partie.getStatut())
-                    ? EvenementJeuDTO.Type.CARTE_JOUEE
-                    : EvenementJeuDTO.Type.ENCHERE;
-            pushEtatATous(partieId, joueurs, typeEvt);
-            final Long partieIdFinalC = partieId;
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    botService.jouerSiTourDuBot(partieIdFinalC);
-                }
-            });
-            return getEtatJeu(partieId, utilisateurId);
+        boolean finEncheres = coincheEnchereService.traiterEnchere(partie, joueurActif, contrat, couleur, passe, joueurs);
+        if (finEncheres) {
+            coincheEnchereService.demarrerJeuDepuisEnchere(partie);
         }
-
-        // --- Enchères normales (coinche == 0) ---
-        if (passe) {
-            // Enregistrer le passe
-            Enchere e = new Enchere();
-            e.setPartie(partie);
-            e.setPreneur(joueurActif);
-            e.setPasse(true);
-            e.setContrat(0);
-            enchereRepository.save(e);
-
-            partie.setPassesConsecutives(partie.getPassesConsecutives() + 1);
-
-            // Si 4 passes consécutives sans contrat → relancer la donne (reset)
-            if (partie.getPassesConsecutives() >= 4) {
-                throw new BusinessException("Quatre passes consécutives : la donne est annulée. Redémarrez la partie.");
-            }
-        } else {
-            // Valider l'enchère
-            if (contrat == null || contrat < 80 || contrat > 160 || contrat % 10 != 0) {
-                throw new BusinessException("Contrat invalide. Valeur entre 80 et 160, multiple de 10.");
-            }
-            if (couleur == null || couleur.isBlank()) {
-                throw new BusinessException("La couleur de l'atout est obligatoire.");
-            }
-            String[] couleursValides = { "Coeur", "Carreau", "Trefle", "Pique", "Sans-atout", "Tout-atout" };
-            if (Arrays.stream(couleursValides).noneMatch(c -> c.equalsIgnoreCase(couleur))) {
-                throw new BusinessException(
-                        "Couleur invalide. Valeurs acceptées : Coeur, Carreau, Trefle, Pique, Sans-atout, Tout-atout.");
-            }
-
-            // Vérifier que le contrat surenchérit sur le précédent
-            if (partie.getContratValeur() > 0 && contrat <= partie.getContratValeur()) {
-                throw new BusinessException(
-                        "Le contrat doit être supérieur au contrat précédent (" + partie.getContratValeur() + ").");
-            }
-
-            Enchere e = new Enchere();
-            e.setPartie(partie);
-            e.setPreneur(joueurActif);
-            e.setPasse(false);
-            e.setContrat(contrat);
-            e.setCouleur(capitalise(couleur));
-            enchereRepository.save(e);
-
-            partie.setContratValeur(contrat);
-            partie.setContratCouleur(capitalise(couleur));
-            partie.setPreneurId(joueurActif.getId());
-            partie.setPassesConsecutives(0);
-        }
-
-        // Passer au joueur suivant
-        partie.setTourJoueurIndex((partie.getTourJoueurIndex() + 1) % 4);
-
-        // Vérifier si on doit passer en EN_JEU :
-        // Condition : il y a un contrat ET les 3 joueurs suivants ont tous passé
-        List<Enchere> toutesEncheres = enchereRepository.findByPartie_IdOrderByIdAsc(partieId);
-        if (partie.getContratValeur() > 0 && doitCommencerJeu(toutesEncheres)) {
-            demarrerJeuDepuisEnchere(partie);
-        }
-
+        
         partieRepository.save(partie);
-
-        // Push WebSocket : notifier tous les joueurs du nouvel état
-        EvenementJeuDTO.Type typeEvt = "EN_JEU".equals(partie.getStatut())
-                ? EvenementJeuDTO.Type.CARTE_JOUEE
-                : EvenementJeuDTO.Type.ENCHERE;
+        EvenementJeuDTO.Type typeEvt = "EN_JEU".equals(partie.getStatut()) ? EvenementJeuDTO.Type.CARTE_JOUEE : EvenementJeuDTO.Type.ENCHERE;
         pushEtatATous(partieId, joueurs, typeEvt);
-
-        // Déclencher le bot après le commit (évite la lecture de données pas encore
-        // commitées)
-        final Long partieIdFinal = partieId;
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        final Long pId = partieId;
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
             @Override
-            public void afterCommit() {
-                botService.jouerSiTourDuBot(partieIdFinal);
-            }
+            public void afterCommit() { botService.jouerSiTourDuBot(pId); }
         });
-
         return getEtatJeu(partieId, utilisateurId);
     }
 
@@ -393,36 +167,10 @@ public class CoincheService {
      * Démarre la phase EN_JEU à partir de la phase d'enchères.
      * Applique le multiplicateur coinche/surcoinche et configure l'atout.
      */
-    private void demarrerJeuDepuisEnchere(Partie partie) {
-        partie.setStatut("EN_JEU");
-        partie.setAtout(partie.getContratCouleur());
-        partie.setNumPliCourant(1);
-        // Applique le multiplicateur via enchereType pour cohérence avec terminerPartie
-        // (coinche==1 → ×2, coinche==2 → ×4 ; géré déjà dans terminerPartie via
-        // partie.getCoinche())
-        // Le premier joueur de la donne (rotation) ouvre le premier pli
-        partie.setTourJoueurIndex((partie.getDonneActuelle() - 1) % 4);
-    }
-
     /**
      * Retourne true si, depuis la dernière enchère réelle, il y a eu 3 passes
      * consécutives.
      */
-    private boolean doitCommencerJeu(List<Enchere> encheres) {
-        if (encheres.size() < 4)
-            return false;
-        // Compter les passes depuis la dernière enchère réelle
-        int passesDepuisDernierContrat = 0;
-        for (int i = encheres.size() - 1; i >= 0; i--) {
-            if (encheres.get(i).isPasse()) {
-                passesDepuisDernierContrat++;
-            } else {
-                break;
-            }
-        }
-        return passesDepuisDernierContrat >= 3;
-    }
-
     // =========================================================
     // JOUER UNE CARTE
     // =========================================================
@@ -462,7 +210,7 @@ public class CoincheService {
                 });
 
         // Vérifier les règles de suivi de couleur
-        verifierReglesCouleur(joueurActif, carteJouee, pli, partie.getAtout(), joueurs);
+        coincheReglesService.verifierReglesCouleur(joueurActif, carteJouee, pli, partie.getAtout(), joueurs);
 
         // Jouer la carte
         pli.getCartesJouees().add(carteJouee);
@@ -516,138 +264,11 @@ public class CoincheService {
      * monter).
      * Gère les trois modes : coinche normale, Sans-atout, Tout-atout.
      */
-    private void verifierReglesCouleur(Joueur joueur, Carte carteJouee, Pli pli, String atout, List<Joueur> joueurs) {
-        if (pli.getCartesJouees().isEmpty())
-            return; // premier à jouer dans ce pli, tout est permis
-
-        Carte premiereCarteJouee = pli.getCartesJouees().get(0);
-        String couleurDemandee = premiereCarteJouee.getCouleur();
-        List<Carte> main = joueur.getCartesEnMain();
-        boolean possedeColoreDemandee = main.stream().anyMatch(c -> c.getCouleur().equals(couleurDemandee));
-
-        // --- Mode Sans-atout : uniquement l'obligation de suivre la couleur ---
-        if ("Sans-atout".equals(atout)) {
-            if (!carteJouee.getCouleur().equals(couleurDemandee) && possedeColoreDemandee) {
-                throw new BusinessException("Vous devez suivre la couleur demandée (" + couleurDemandee + ").");
-            }
-            return; // pas d'atout → pas de coupe ni de montée inter-couleurs
-        }
-
-        // --- Mode Tout-atout : chaque couleur est son propre atout ---
-        if ("Tout-atout".equals(atout)) {
-            if (!carteJouee.getCouleur().equals(couleurDemandee)) {
-                if (possedeColoreDemandee) {
-                    throw new BusinessException("Vous devez suivre la couleur demandée (" + couleurDemandee + ").");
-                }
-                return; // n'a pas la couleur → peut défausser librement
-            }
-            // Joue la couleur demandée → obligation de monter (ORDRE_ATOUT pour toutes les
-            // couleurs)
-            Optional<Carte> plusFort = pli.getCartesJouees().stream()
-                    .filter(c -> c.getCouleur().equals(couleurDemandee))
-                    .max(Comparator.comparingInt(c -> ORDRE_ATOUT.indexOf(c.getValeur())));
-            if (plusFort.isPresent()) {
-                boolean peutMonter = main.stream()
-                        .filter(c -> c.getCouleur().equals(couleurDemandee))
-                        .anyMatch(c -> ORDRE_ATOUT.indexOf(c.getValeur()) > ORDRE_ATOUT
-                                .indexOf(plusFort.get().getValeur()));
-                if (peutMonter && ORDRE_ATOUT.indexOf(carteJouee.getValeur()) <= ORDRE_ATOUT
-                        .indexOf(plusFort.get().getValeur())) {
-                    throw new BusinessException("Vous devez monter (jouer plus fort dans la couleur).");
-                }
-            }
-            return;
-        }
-
-        // --- Mode coinche normal (atout = couleur) ---
-        boolean possedeAtout = main.stream().anyMatch(c -> c.getCouleur().equals(atout));
-
-        // Déterminer l'équipe du joueur courant et du maître en cours
-        int equipeJoueur = joueur.getEquipe();
-        boolean partenaireEstMaitre = estPartenaireLeGagnantActuel(
-                pli.getCartesJouees(), pli.getJoueurOuvreurIndex(), equipeJoueur, joueurs, atout);
-
-        if (!carteJouee.getCouleur().equals(couleurDemandee)) {
-            if (possedeColoreDemandee) {
-                throw new BusinessException("Vous devez suivre la couleur demandée (" + couleurDemandee + ").");
-            }
-            // N'a pas la couleur demandée → obligation de couper SAUF si le partenaire est
-            // maître
-            if (!couleurDemandee.equals(atout) && possedeAtout
-                    && !carteJouee.getCouleur().equals(atout)
-                    && !partenaireEstMaitre) {
-                throw new BusinessException("Vous devez couper avec un atout.");
-            }
-        }
-
-        // Obligation de monter à l'atout si on joue atout
-        if (carteJouee.getCouleur().equals(atout) && couleurDemandee.equals(atout)) {
-            Optional<Carte> plusFortAtoutJoue = pli.getCartesJouees().stream()
-                    .filter(c -> c.getCouleur().equals(atout))
-                    .max(Comparator.comparingInt(c -> ORDRE_ATOUT.indexOf(c.getValeur())));
-
-            if (plusFortAtoutJoue.isPresent()) {
-                boolean peutMonter = main.stream()
-                        .filter(c -> c.getCouleur().equals(atout))
-                        .anyMatch(c -> ORDRE_ATOUT.indexOf(c.getValeur()) > ORDRE_ATOUT
-                                .indexOf(plusFortAtoutJoue.get().getValeur()));
-                // Obligation de monter SAUF si le partenaire est déjà le plus fort à l'atout
-                if (peutMonter && !partenaireEstMaitre
-                        && ORDRE_ATOUT.indexOf(carteJouee.getValeur()) <= ORDRE_ATOUT
-                                .indexOf(plusFortAtoutJoue.get().getValeur())) {
-                    throw new BusinessException("Vous devez monter à l'atout (jouer un atout plus fort).");
-                }
-            }
-        }
-    }
-
     /**
      * Retourne true si c'est le partenaire du joueur courant qui est actuellement
      * maître du pli.
      * Utilisé pour lever l'obligation de couper/monter.
      */
-    private boolean estPartenaireLeGagnantActuel(List<Carte> cartesJouees, int ouvreurIndex,
-            int equipeJoueur, List<Joueur> joueurs, String atout) {
-        if (cartesJouees.isEmpty())
-            return false;
-
-        // Calculer le gagnant actuel des cartes déjà jouées
-        String couleurOuverte = cartesJouees.get(0).getCouleur();
-        int indexGagnant = ouvreurIndex;
-        Carte meilleureCarteCouleurOuverte = cartesJouees.get(0);
-        Carte meilleureAtout = null;
-
-        for (int i = 0; i < cartesJouees.size(); i++) {
-            Carte c = cartesJouees.get(i);
-            int idx = (ouvreurIndex + i) % 4;
-            if (c.getCouleur().equals(atout)) {
-                if (meilleureAtout == null
-                        || ORDRE_ATOUT.indexOf(c.getValeur()) > ORDRE_ATOUT.indexOf(meilleureAtout.getValeur())) {
-                    meilleureAtout = c;
-                    indexGagnant = idx;
-                }
-            } else if (meilleureAtout == null && c.getCouleur().equals(couleurOuverte)) {
-                if (ORDRE_NORMAL.indexOf(c.getValeur()) > ORDRE_NORMAL
-                        .indexOf(meilleureCarteCouleurOuverte.getValeur())) {
-                    meilleureCarteCouleurOuverte = c;
-                    indexGagnant = idx;
-                }
-            }
-        }
-
-        // Trouver l'équipe du gagnant actuel
-        final int gagnantIndex = indexGagnant;
-        Joueur gagnantActuel = joueurs.stream()
-                .filter(j -> j.getPosition() == gagnantIndex)
-                .findFirst().orElse(null);
-
-        if (gagnantActuel == null)
-            return false;
-        // Le partenaire est maître si le gagnant est dans la même équipe mais n'est pas
-        // le joueur lui-même
-        return gagnantActuel.getEquipe() == equipeJoueur;
-    }
-
     /**
      * Évalue le pli, attribue les points, met à jour les scores, gère la fin de
      * partie.
@@ -904,81 +525,23 @@ public class CoincheService {
     public EtatCoincheDTO coincher(Long partieId, Long utilisateurId, boolean surcoinche) {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
-
-        if (!"EN_ENCHERE".equals(partie.getStatut())) {
-            throw new BusinessException("La coinche n'est possible que pendant les enchères.");
-        }
-        if (partie.getContratValeur() <= 0) {
-            throw new BusinessException("Il n'y a pas encore de contrat à coincher.");
-        }
-
         List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
-        Joueur monJoueur = joueurs.stream()
-                .filter(j -> j.getUtilisateur().getId().equals(utilisateurId))
-                .findFirst()
+        Joueur monJoueur = joueurs.stream().filter(j -> j.getUtilisateur().getId().equals(utilisateurId)).findFirst()
                 .orElseThrow(() -> new BusinessException("Vous n'êtes pas dans cette partie."));
 
-        // Trouver le preneur et son équipe
-        Joueur preneur = joueurs.stream()
-                .filter(j -> j.getId().equals(partie.getPreneurId()))
-                .findFirst()
-                .orElseThrow(() -> new BusinessException("Preneur introuvable."));
-        int equipePreneur = preneur.getEquipe();
-        int equipeJoueur = monJoueur.getEquipe();
-
-        if (surcoinche) {
-            // --- SURCOINCHE ---
-            // Pré-conditions
-            if (partie.getCoinche() != 1) {
-                throw new BusinessException("La surcoinche n'est possible qu'après une coinche.");
-            }
-            if (equipeJoueur != equipePreneur) {
-                throw new BusinessException("Seule l'équipe du preneur peut surcoincher.");
-            }
-            // Application
-            partie.setCoinche(2);
-            partie.setEnchereType("SURCOINCHE");
-
-            // La surcoinche met fin immédiatement aux enchères
-            demarrerJeuDepuisEnchere(partie);
-
-        } else {
-            // --- COINCHE ---
-            // Pré-conditions
-            if (partie.getCoinche() != 0) {
-                throw new BusinessException("La donne est déjà coinchée ou surcoinchée.");
-            }
-            if (equipeJoueur == equipePreneur) {
-                throw new BusinessException("Seuls les adversaires du preneur peuvent coincher.");
-            }
-            // Application
-            partie.setCoinche(1);
-            partie.setEnchereType("COINCHE");
-            // Remettre le compteur de passes à 0 pour compter les 2 passes de l'équipe
-            // preneure
-            partie.setPassesConsecutives(0);
-
-            // La parole revient au preneur lui-même (pas forcément le joueur à la position
-            // la plus basse),
-            // puis à son partenaire s'il passe également.
-            partie.setTourJoueurIndex(preneur.getPosition());
+        boolean finEncheres = coincheEnchereService.traiterCoinche(partie, monJoueur, surcoinche, joueurs);
+        if (finEncheres) {
+            coincheEnchereService.demarrerJeuDepuisEnchere(partie);
         }
-
+        
         partieRepository.save(partie);
-        EvenementJeuDTO.Type typeEvt = "EN_JEU".equals(partie.getStatut())
-                ? EvenementJeuDTO.Type.CARTE_JOUEE
-                : EvenementJeuDTO.Type.ENCHERE;
+        EvenementJeuDTO.Type typeEvt = "EN_JEU".equals(partie.getStatut()) ? EvenementJeuDTO.Type.CARTE_JOUEE : EvenementJeuDTO.Type.ENCHERE;
         pushEtatATous(partieId, joueurs, typeEvt);
-
-        // Déclencher le bot si nécessaire après commit
-        final Long partieIdFinal = partieId;
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        final Long pId = partieId;
+        org.springframework.transaction.support.TransactionSynchronizationManager.registerSynchronization(new org.springframework.transaction.support.TransactionSynchronization() {
             @Override
-            public void afterCommit() {
-                botService.jouerSiTourDuBot(partieIdFinal);
-            }
+            public void afterCommit() { botService.jouerSiTourDuBot(pId); }
         });
-
         return getEtatJeu(partieId, utilisateurId);
     }
 
@@ -986,37 +549,4 @@ public class CoincheService {
     // HELPERS
     // =========================================================
 
-    private String capitalise(String s) {
-        if (s == null || s.isBlank())
-            return s;
-        // Préserver la casse des modes spéciaux
-        if (s.equalsIgnoreCase("Sans-atout"))
-            return "Sans-atout";
-        if (s.equalsIgnoreCase("Tout-atout"))
-            return "Tout-atout";
-        return s.substring(0, 1).toUpperCase() + s.substring(1).toLowerCase();
     }
-
-    private ResultatDTO buildResultat(Partie partie, List<Joueur> joueurs) {
-        ResultatDTO r = new ResultatDTO();
-        r.setScoreA(partie.getScoreA());
-        r.setScoreB(partie.getScoreB());
-        r.setContratValeur(partie.getContratValeur());
-        r.setContratCouleur(partie.getContratCouleur());
-
-        Long preneurId = partie.getPreneurId();
-        if (preneurId != null) {
-            joueurs.stream()
-                    .filter(j -> j.getId().equals(preneurId))
-                    .findFirst()
-                    .ifPresent(preneur -> {
-                        int equipePreneur = preneur.getEquipe();
-                        int scorePreneur = (equipePreneur == 1) ? partie.getScoreA() : partie.getScoreB();
-                        r.setContratRempli(scorePreneur >= partie.getContratValeur());
-                        r.setPseudoPreneur(preneur.getUtilisateur().getPseudo());
-                        r.setGagnantEquipe(partie.getScoreA() > partie.getScoreB() ? 1 : 2);
-                    });
-        }
-        return r;
-    }
-}

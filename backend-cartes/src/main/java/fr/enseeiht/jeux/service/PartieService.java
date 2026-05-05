@@ -9,6 +9,7 @@ import fr.enseeiht.jeux.exception.ResourceNotFoundException;
 import fr.enseeiht.jeux.modele.*;
 import fr.enseeiht.jeux.repository.*;
 import fr.enseeiht.jeux.tarot.TarotService;
+import fr.enseeiht.jeux.coinche.EtatCoincheDTO;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;

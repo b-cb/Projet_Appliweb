@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -54,6 +55,9 @@ public class TarotService {
     private final SimpMessagingTemplate messagingTemplate;
     private final TarotBotService tarotBotService;
     private final fr.enseeiht.jeux.repository.CarteRepository carteRepository;
+    private final TarotReglesService tarotReglesService;
+    private final TarotEtatService tarotEtatService;
+    private final TarotEnchereService tarotEnchereService;
 
     public TarotService(PartieRepository partieRepository,
                         JoueurRepository joueurRepository,
@@ -63,7 +67,10 @@ public class TarotService {
                         TarotScoringService scoringService,
                         SimpMessagingTemplate messagingTemplate,
                         @Lazy TarotBotService tarotBotService,
-                        fr.enseeiht.jeux.repository.CarteRepository carteRepository) {
+                        fr.enseeiht.jeux.repository.CarteRepository carteRepository,
+                        TarotReglesService tarotReglesService,
+                        TarotEtatService tarotEtatService,
+                        TarotEnchereService tarotEnchereService) {
         this.partieRepository = partieRepository;
         this.joueurRepository = joueurRepository;
         this.utilisateurRepository = utilisateurRepository;
@@ -73,6 +80,9 @@ public class TarotService {
         this.messagingTemplate = messagingTemplate;
         this.tarotBotService = tarotBotService;
         this.carteRepository = carteRepository;
+        this.tarotReglesService = tarotReglesService;
+        this.tarotEtatService = tarotEtatService;
+        this.tarotEnchereService = tarotEnchereService;
     }
 
     // =========================================================
@@ -80,164 +90,7 @@ public class TarotService {
     // =========================================================
 
     public EtatTarotDTO getEtatJeuTarot(Long partieId, Long utilisateurId) {
-        Partie partie = partieRepository.findById(partieId)
-                .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
-
-        List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
-        int nbJoueurs = partie.getNbJoueursRequis();
-
-        Joueur monJoueur = joueurs.stream()
-                .filter(j -> j.getUtilisateur().getId().equals(utilisateurId))
-                .findFirst()
-                .orElseThrow(() -> new BusinessException("Vous n'êtes pas dans cette partie."));
-
-        EtatTarotDTO dto = new EtatTarotDTO();
-        dto.setPartieId(partieId);
-        dto.setStatut(partie.getStatut());
-        dto.setPhaseJeu(partie.getPhaseJeu());
-        dto.setEnchereType(partie.getEnchereType());
-        dto.setMultiplicateur(partie.getMultiplicateur());
-        dto.setScoreA(partie.getScoreA());
-        dto.setScoreB(partie.getScoreB());
-        dto.setNumPliCourant(partie.getNumPliCourant());
-        dto.setMonJoueurId(monJoueur.getId());
-        dto.setMonEquipe(monJoueur.getEquipe());
-        dto.setEstPreneur(monJoueur.getId().equals(partie.getPreneurId()));
-
-        // 5 joueurs : partenaire et appel du roi
-        if (partie.getNbJoueursRequis() == 5) {
-            dto.setAppelRoi(partie.getAppelRoi()); // visible par tous une fois appelé
-            if (partie.getPartenaireId() != null) {
-                boolean estPartenaire = monJoueur.getId().equals(partie.getPartenaireId());
-                dto.setEstPartenaire(estPartenaire);
-                joueurs.stream()
-                        .filter(j -> j.getId().equals(partie.getPartenaireId()))
-                        .findFirst()
-                        .ifPresent(p -> dto.setPseudoPartenaire(p.getUtilisateur().getPseudo()));
-            }
-        }
-
-        // Ma main (en phase CHIEN le preneur voit aussi les cartes du chien pour préparer l'écart)
-        List<Carte> mainAffichee = new ArrayList<>(monJoueur.getCartesEnMain());
-        if ("CHIEN".equals(partie.getPhaseJeu()) && monJoueur.getId().equals(partie.getPreneurId())) {
-            mainAffichee.addAll(partie.getChien());
-        }
-        dto.setMaMain(mainAffichee.stream()
-                .sorted(Comparator.comparing(Carte::getCouleur).thenComparing(c -> ordreCarte(c)))
-                .map(CarteDTO::fromEntity)
-                .collect(Collectors.toList()));
-
-        // Le chien est visible par TOUS les joueurs en phases CHIEN et CHIEN_VU
-        if ("CHIEN".equals(partie.getPhaseJeu()) || "CHIEN_VU".equals(partie.getPhaseJeu())) {
-            dto.setChien(partie.getChien().stream().map(CarteDTO::fromEntity).collect(Collectors.toList()));
-        }
-
-        // Joueur dont c'est le tour
-        if (!joueurs.isEmpty()) {
-            Joueur joueurTour = joueurs.stream()
-                    .filter(j -> j.getPosition() == partie.getTourJoueurIndex())
-                    .findFirst().orElse(null);
-            if (joueurTour != null) {
-                dto.setTourJoueurId(joueurTour.getId());
-                dto.setTourPseudo(joueurTour.getUtilisateur().getPseudo());
-            }
-        }
-
-        // Pli courant
-        Optional<Pli> pliOpt = pliRepository.findByPartie_IdAndNumTour(partieId, partie.getNumPliCourant());
-        if (pliOpt.isPresent()) {
-            Pli pli = pliOpt.get();
-            List<Carte> cartesJouees = pli.getCartesJouees();
-            int ouvreurIndex = pli.getJoueurOuvreurIndex();
-            List<EtatTarotDTO.CartePliDTO> pliCourant = new ArrayList<>();
-            for (int i = 0; i < cartesJouees.size(); i++) {
-                int idx = (ouvreurIndex + i) % nbJoueurs;
-                final int idxFinal = idx;
-                Joueur j = joueurs.stream().filter(jj -> jj.getPosition() == idxFinal).findFirst().orElse(null);
-                if (j != null) {
-                    pliCourant.add(new EtatTarotDTO.CartePliDTO(
-                            CarteDTO.fromEntity(cartesJouees.get(i)),
-                            j.getUtilisateur().getPseudo(),
-                            j.getEquipe()
-                    ));
-                }
-            }
-            dto.setPliCourant(pliCourant);
-        } else {
-            dto.setPliCourant(new ArrayList<>());
-        }
-
-        // Dernier pli terminé
-        if (partie.getNumPliCourant() > 1 || "TERMINEE".equals(partie.getStatut())) {
-            int numDernier = "TERMINEE".equals(partie.getStatut())
-                    ? partie.getNumPliCourant() : partie.getNumPliCourant() - 1;
-            Optional<Pli> dernierOpt = pliRepository.findByPartie_IdAndNumTour(partieId, numDernier);
-            if (dernierOpt.isPresent()) {
-                Pli dp = dernierOpt.get();
-                List<Carte> dpCartes = dp.getCartesJouees();
-                int dpOuvreur = dp.getJoueurOuvreurIndex();
-                List<EtatTarotDTO.CartePliDTO> dernierPliList = new ArrayList<>();
-                for (int i = 0; i < dpCartes.size(); i++) {
-                    int idx = (dpOuvreur + i) % nbJoueurs;
-                    final int idxFinal = idx;
-                    Joueur j = joueurs.stream().filter(jj -> jj.getPosition() == idxFinal).findFirst().orElse(null);
-                    if (j != null) {
-                        dernierPliList.add(new EtatTarotDTO.CartePliDTO(
-                                CarteDTO.fromEntity(dpCartes.get(i)),
-                                j.getUtilisateur().getPseudo(),
-                                j.getEquipe()
-                        ));
-                    }
-                }
-                dto.setDernierPli(dernierPliList);
-                dto.setDernierPliGagnantEquipe(dp.getGagnantEquipe());
-            }
-        }
-
-        // Historique des enchères (avec typeBid)
-        dto.setEncheres(enchereRepository.findByPartie_IdOrderByIdAsc(partieId).stream()
-                .map(EnchereDTO::fromEntity)
-                .collect(Collectors.toList()));
-
-        // Progression du score preneur
-        if (partie.getPreneurId() != null && "EN_JEU".equals(partie.getStatut())) {
-            List<Carte> cartesPreneur = collecterCartesPreneur(partie, joueurs);
-            int pointsX2 = scoringService.calculerPointsX2(cartesPreneur)
-                         + correctionExcuseX2(partie, joueurs);
-            int bouts = scoringService.compterBouts(cartesPreneur);
-            dto.setPointsPreneurX2(pointsX2);
-            dto.setBoutsPreneur(bouts);
-            dto.setSeuilCourant(scoringService.seuilPourBouts(bouts));
-        }
-
-        // Poignée
-        dto.setPoigneeDeclaree(partie.getPoigneeDeclaree());
-
-        // Petit sec
-        dto.setPetitSecDetecte(partie.isPetitSecDetecte());
-        if (partie.isPetitSecDetecte()) {
-            // Indiquer si C'EST ce joueur qui a le petit sec
-            boolean monPetitSec = monJoueur.getCartesEnMain().stream()
-                    .anyMatch(c -> "Atout".equals(c.getCouleur()) && "1".equals(c.getValeur()))
-                    && monJoueur.getCartesEnMain().stream()
-                            .filter(c -> "Atout".equals(c.getCouleur()) && !"Excuse".equals(c.getValeur()))
-                            .count() == 1;
-            dto.setMonPetitEstSec(monPetitSec);
-        }
-
-        // Scores individuels : map joueurId → scorePartie pour le frontend
-        java.util.Map<Long, Integer> scoresMap = new java.util.HashMap<>();
-        for (Joueur j : joueurs) {
-            scoresMap.put(j.getId(), j.getScorePartie());
-        }
-        dto.setScoresJoueurs(scoresMap);
-
-        // Résultat si terminée
-        if ("TERMINEE".equals(partie.getStatut())) {
-            dto.setResultat(buildResultatTarot(partie, joueurs));
-        }
-
-        return dto;
+        return tarotEtatService.getEtatJeuTarot(partieId, utilisateurId);
     }
 
     // =========================================================
@@ -247,11 +100,6 @@ public class TarotService {
     public EtatTarotDTO enchirirTarot(Long partieId, Long utilisateurId, String typeBid) {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
-
-        if (!"EN_ENCHERE".equals(partie.getStatut()) || partie.getPhaseJeu() != null) {
-            throw new BusinessException("La partie n'est pas en phase d'enchères Tarot.");
-        }
-
         List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
         int nbJoueurs = partie.getNbJoueursRequis();
 
@@ -264,95 +112,28 @@ public class TarotService {
             throw new BusinessException("Ce n'est pas votre tour d'enchérir.");
         }
 
-        if (typeBid == null || typeBid.isBlank()) {
-            throw new BusinessException("typeBid requis.");
+        boolean encheresTerminees = tarotEnchereService.traiterEnchere(partie, joueurActif, typeBid);
+
+        if ("PASSE".equals(typeBid.toUpperCase().trim()) && partie.getPassesConsecutives() >= nbJoueurs) {
+            partie.setDonneActuelle(partie.getDonneActuelle() + 1);
+            redemarrerDonneTarot(partie, joueurs);
+            partieRepository.save(partie);
+            pushEtatTarotATous(partieId, joueurRepository.findByPartie_Id(partieId), EvenementJeuDTO.Type.ENCHERE);
+            final Long partieIdFinal2 = partieId;
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override public void afterCommit() { tarotBotService.jouerSiTourDuBot(partieIdFinal2); }
+            });
+            return getEtatJeuTarot(partieId, utilisateurId);
         }
-        String bid = typeBid.toUpperCase().trim();
 
-        if ("PASSE".equals(bid)) {
-            // Enregistrer le passe
-            Enchere e = new Enchere();
-            e.setPartie(partie);
-            e.setPreneur(joueurActif);
-            e.setPasse(true);
-            e.setTypeBid("PASSE");
-            enchereRepository.save(e);
-
-            partie.setPassesConsecutives(partie.getPassesConsecutives() + 1);
-
-            // Si tous les joueurs ont passé sans contrat → redémarrer la donne
-            if (partie.getPassesConsecutives() >= nbJoueurs) {
-                // Avancer le compteur de donne pour que le premier joueur tourne
-                partie.setDonneActuelle(partie.getDonneActuelle() + 1);
-                redemarrerDonneTarot(partie, joueurs);
-                partieRepository.save(partie);
-                List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);
-                pushEtatTarotATous(partieId, joueursActualises, EvenementJeuDTO.Type.ENCHERE);
-                // Déclencher le bot pour la nouvelle donne (AVANT le return !)
-                final Long partieIdFinal2 = partieId;
-                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                    @Override public void afterCommit() { tarotBotService.jouerSiTourDuBot(partieIdFinal2); }
-                });
-                return getEtatJeuTarot(partieId, utilisateurId);
-            }
-
-            // Passer au joueur suivant
-            partie.setTourJoueurIndex((partie.getTourJoueurIndex() + 1) % nbJoueurs);
-
-            // Si une enchère a été faite et que tous les autres ont passé → lancer le jeu
-            if (partie.getEnchereType() != null) {
-                List<Enchere> encheresMaj = enchereRepository.findByPartie_IdOrderByIdAsc(partieId);
-                if (doitTerminerEncheres(encheresMaj, nbJoueurs)) {
-                    lancerJeuTarot(partie, joueurs, partie.getEnchereType());
-                }
-            }
-        } else {
-            // Valider le type d'enchère
-            if (!ENCHERES_ORDRE.contains(bid)) {
-                throw new BusinessException("Enchère invalide. Valeurs : PETITE, GARDE, GARDE_SANS, GARDE_CONTRE.");
-            }
-
-            // Doit surenchérir sur l'enchère actuelle (si une existe)
-            String enchereActuelle = partie.getEnchereType();
-            if (enchereActuelle != null) {
-                int niveauActuel = ENCHERES_ORDRE.indexOf(enchereActuelle);
-                int niveauNouveau = ENCHERES_ORDRE.indexOf(bid);
-                if (niveauNouveau <= niveauActuel) {
-                    throw new BusinessException("Vous devez enchérir plus haut que " + enchereActuelle + ".");
-                }
-            }
-
-            // Enregistrer l'enchère
-            Enchere e = new Enchere();
-            e.setPartie(partie);
-            e.setPreneur(joueurActif);
-            e.setPasse(false);
-            e.setTypeBid(bid);
-            enchereRepository.save(e);
-
-            partie.setEnchereType(bid);
-            partie.setPreneurId(joueurActif.getId());
-            partie.setPassesConsecutives(0);
-
-            // Passer au joueur suivant
-            partie.setTourJoueurIndex((partie.getTourJoueurIndex() + 1) % nbJoueurs);
-
-            // Vérifier si tous les autres ont eu leur chance (N-1 joueurs ont passé après cette enchère)
-            // Ou si c'est GARDE_CONTRE (personne ne peut surenchérir par convention)
-            List<Enchere> toutesEncheres = enchereRepository.findByPartie_IdOrderByIdAsc(partieId);
-            if ("GARDE_CONTRE".equals(bid) || doitTerminerEncheres(toutesEncheres, nbJoueurs)) {
-                // L'enchère est gagnée — initialiser le jeu
-                lancerJeuTarot(partie, joueurs, bid);
-            }
+        if (encheresTerminees) {
+            tarotEnchereService.initialiserJeuApresEnchere(partie, joueurs);
+            for (Joueur j : joueurs) joueurRepository.save(j); // update équipes
         }
 
         partieRepository.save(partie);
+        pushEtatTarotATous(partieId, joueurRepository.findByPartie_Id(partieId), EvenementJeuDTO.Type.ENCHERE);
 
-        // Push WebSocket
-        List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);
-        pushEtatTarotATous(partieId, joueursActualises, EvenementJeuDTO.Type.ENCHERE);
-
-        // Déclencher bot
         final Long partieIdFinal = partieId;
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override public void afterCommit() { tarotBotService.jouerSiTourDuBot(partieIdFinal); }
@@ -364,51 +145,10 @@ public class TarotService {
     /**
      * Retourne true si, après la dernière enchère réelle, N-1 joueurs ont passé.
      */
-    private boolean doitTerminerEncheres(List<Enchere> encheres, int nbJoueurs) {
-        if (encheres.isEmpty()) return false;
-        int passesDepuisDerniere = 0;
-        for (int i = encheres.size() - 1; i >= 0; i--) {
-            if (encheres.get(i).isPasse()) passesDepuisDerniere++;
-            else break;
-        }
-        return passesDepuisDerniere >= nbJoueurs - 1;
-    }
 
     /**
      * Initialise le jeu après qu'une enchère ait été gagnée.
      */
-    private void lancerJeuTarot(Partie partie, List<Joueur> joueurs, String enchereType) {
-        int mult = scoringService.multiplicateurPourType(enchereType);
-        partie.setMultiplicateur(mult);
-
-        // Assigner les équipes : preneur = 1, défenseurs = 2
-        for (Joueur j : joueurs) {
-            j.setEquipe(j.getId().equals(partie.getPreneurId()) ? 1 : 2);
-            joueurRepository.save(j);
-        }
-
-        // C'est le premier joueur de la donne (rotation) qui ouvre le premier pli, pas le preneur
-        int nbJoueursPartie = partie.getNbJoueursRequis();
-        partie.setTourJoueurIndex((partie.getDonneActuelle() - 1) % nbJoueursPartie);
-
-        // Déterminer la prochaine phase
-        boolean cinqJoueurs = partie.getNbJoueursRequis() == 5;
-        if (cinqJoueurs) {
-            // En 5j : le preneur doit d'abord appeler un Roi avant d'accéder au chien
-            partie.setPhaseJeu("APPEL_ROI");
-        } else if ("GARDE_CONTRE".equals(enchereType)) {
-            // Chien directement aux défenseurs (invisible), commencer le jeu
-            partie.setStatut("EN_JEU");
-            partie.setPhaseJeu("JEU");
-            partie.setNumPliCourant(1);
-        } else if ("GARDE_SANS".equals(enchereType)) {
-            // Le preneur voit le chien mais ne l'écarte pas
-            partie.setPhaseJeu("CHIEN_VU");
-        } else {
-            // PETITE ou GARDE : preneur prend le chien et écarte
-            partie.setPhaseJeu("CHIEN");
-        }
-    }
 
     // =========================================================
     // PHASE APPEL ROI (5 joueurs uniquement)
@@ -424,13 +164,7 @@ public class TarotService {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
 
-        if (!"EN_ENCHERE".equals(partie.getStatut()) || !"APPEL_ROI".equals(partie.getPhaseJeu())) {
-            throw new BusinessException("La partie n'est pas en phase d'appel du Roi.");
-        }
-
-        // Vérifier que c'est le preneur qui appelle
-        List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
-        Joueur preneur = joueurs.stream()
+        Joueur preneur = joueurRepository.findByPartie_Id(partieId).stream()
                 .filter(j -> j.getId().equals(partie.getPreneurId()))
                 .findFirst().orElseThrow(() -> new BusinessException("Preneur introuvable."));
 
@@ -438,43 +172,14 @@ public class TarotService {
             throw new BusinessException("Seul le preneur peut appeler un Roi.");
         }
 
-        if (couleur == null || couleur.isBlank()) {
-            throw new BusinessException("Couleur requise (Coeur, Carreau, Trefle ou Pique).");
-        }
-        String[] couleursValides = {"Coeur", "Carreau", "Trefle", "Pique"};
-        boolean couleurOk = false;
-        for (String c : couleursValides) if (c.equals(couleur)) { couleurOk = true; break; }
-        if (!couleurOk) throw new BusinessException("Couleur invalide : " + couleur);
-
-        partie.setAppelRoi(couleur);
-
-        // Vérifier si le preneur détient lui-même le Roi appelé
-        // Dans ce cas, il joue seul (partenaireId reste null)
-        // Note : si le preneur détient lui-même le Roi appelé, il joue seul (partenaireId reste null).
-
-        // Passer à la phase suivante selon l'enchère
-        String enchereType = partie.getEnchereType();
-        if ("GARDE_CONTRE".equals(enchereType)) {
-            partie.setStatut("EN_JEU");
-            partie.setPhaseJeu("JEU");
-            partie.setNumPliCourant(1);
-        } else if ("GARDE_SANS".equals(enchereType)) {
-            partie.setPhaseJeu("CHIEN_VU");
-        } else {
-            partie.setPhaseJeu("CHIEN");
-        }
-
+        tarotEnchereService.appelerRoi(partie, preneur, couleur);
         partieRepository.save(partie);
 
-        List<Joueur> joueursAct = joueurRepository.findByPartie_Id(partieId);
-        pushEtatTarotATous(partieId, joueursAct, EvenementJeuDTO.Type.ENCHERE);
-
-        // Déclencher bot si nécessaire (chien/ecart)
+        pushEtatTarotATous(partieId, joueurRepository.findByPartie_Id(partieId), EvenementJeuDTO.Type.ENCHERE);
         final Long partieIdFinal = partieId;
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override public void afterCommit() { tarotBotService.jouerSiTourDuBot(partieIdFinal); }
         });
-
         return getEtatJeuTarot(partieId, utilisateurId);
     }
 
@@ -490,76 +195,24 @@ public class TarotService {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
 
-        String phase = partie.getPhaseJeu();
-        if (!"CHIEN".equals(phase) && !"CHIEN_VU".equals(phase)) {
-            throw new BusinessException("La partie n'est pas en phase chien/écart.");
-        }
+        Joueur preneur = joueurRepository.findByPartie_Id(partieId).stream()
+                .filter(j -> j.getId().equals(partie.getPreneurId()))
+                .findFirst().orElseThrow(() -> new BusinessException("Preneur introuvable."));
 
-        if (!partie.getPreneurId().equals(getJoueurId(utilisateurId, partieId))) {
+        if (!preneur.getUtilisateur().getId().equals(utilisateurId)) {
             throw new BusinessException("Seul le preneur peut écarter.");
         }
 
-        List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
-        Joueur preneur = joueurs.stream()
-                .filter(j -> j.getId().equals(partie.getPreneurId()))
-                .findFirst()
-                .orElseThrow(() -> new BusinessException("Preneur introuvable."));
-
-        int tailleChien = partie.getChien().size(); // 6 pour 4j, 3 pour 5j (non implémenté)
-
-        if ("CHIEN".equals(phase)) {
-            // Intégrer le chien dans la main du preneur
-            if (preneur.getCartesEnMain().isEmpty() || !partie.getChien().isEmpty()) {
-                preneur.getCartesEnMain().addAll(partie.getChien());
-                partie.getChien().clear();
-            }
-
-            // Valider l'écart
-            if (carteIds == null || carteIds.size() != tailleChien) {
-                throw new BusinessException("Vous devez écarter exactement " + tailleChien + " cartes.");
-            }
-
-            List<Carte> main = new ArrayList<>(preneur.getCartesEnMain());
-            List<Carte> aEcarter = new ArrayList<>();
-            for (Long cid : carteIds) {
-                Carte c = main.stream().filter(cc -> cc.getId().equals(cid)).findFirst()
-                        .orElseThrow(() -> new BusinessException("Carte #" + cid + " non trouvée dans votre main."));
-                aEcarter.add(c);
-            }
-
-            // Règles d'écart : pas de bouts (Petit/Monde/Excuse), pas de Rois
-            // Les atouts non-bouts sont autorisés (règle officielle FFT)
-            for (Carte c : aEcarter) {
-                if (scoringService.isBout(c)) {
-                    throw new BusinessException("Impossible d'écarter un bout (" + c.getValeur() + ").");
-                }
-                if ("Roi".equals(c.getValeur())) {
-                    throw new BusinessException("Impossible d'écarter un Roi.");
-                }
-            }
-
-            // Effectuer l'écart
-            preneur.getCartesEnMain().removeAll(aEcarter);
-            partie.getEcartes().addAll(aEcarter);
-        }
-        // Pour CHIEN_VU (GARDE_SANS) : pas d'écart, le chien reste pour les défenseurs
-
-        // Passer au jeu
-        partie.setStatut("EN_JEU");
-        partie.setPhaseJeu("JEU");
-        partie.setNumPliCourant(1);
-
+        tarotEnchereService.ecarterCartes(partie, preneur, carteIds);
+        
         joueurRepository.save(preneur);
         partieRepository.save(partie);
 
-        List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);
-        pushEtatTarotATous(partieId, joueursActualises, EvenementJeuDTO.Type.CARTE_JOUEE);
-
+        pushEtatTarotATous(partieId, joueurRepository.findByPartie_Id(partieId), EvenementJeuDTO.Type.CARTE_JOUEE);
         final Long partieIdFinal = partieId;
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override public void afterCommit() { tarotBotService.jouerSiTourDuBot(partieIdFinal); }
         });
-
         return getEtatJeuTarot(partieId, utilisateurId);
     }
 
@@ -603,7 +256,7 @@ public class TarotService {
                 });
 
         // Vérifier les règles de jeu Tarot
-        verifierReglesTarot(joueurActif, carteJouee, pli);
+        tarotReglesService.verifierReglesTarot(joueurActif, carteJouee, pli);
 
         // 5j : révéler le partenaire si le Roi appelé vient d'être joué
         if (partie.getAppelRoi() != null && partie.getPartenaireId() == null) {
@@ -662,90 +315,7 @@ public class TarotService {
      * 3. Si joue atout : obligation de monter
      * 4. L'Excuse peut être jouée à tout moment (valeur "Excuse", couleur "Atout")
      */
-    private void verifierReglesTarot(Joueur joueur, Carte carteJouee, Pli pli) {
-        // L'Excuse est toujours jouable
-        if ("Excuse".equals(carteJouee.getValeur()) && "Atout".equals(carteJouee.getCouleur())) return;
 
-        // Premier à jouer dans ce pli → tout est permis
-        if (pli.getCartesJouees().isEmpty()) return;
-
-        List<Carte> main = joueur.getCartesEnMain();
-        Carte premiereCarteDuPli = pli.getCartesJouees().get(0);
-
-        // Si la première carte est l'Excuse, la couleur demandée est la 2e carte
-        String couleurDemandee = premiereCarteDuPli.getCouleur();
-        if ("Excuse".equals(premiereCarteDuPli.getValeur())) {
-            if (pli.getCartesJouees().size() < 2) return; // seule l'Excuse jouée → tout permis
-            couleurDemandee = pli.getCartesJouees().get(1).getCouleur();
-        }
-
-        final String couleurDemandeeFinale = couleurDemandee;
-        boolean joueAtout = "Atout".equals(carteJouee.getCouleur());
-        boolean couleurDemandeeEstAtout = "Atout".equals(couleurDemandee);
-
-        boolean possedeColoreDemandee = main.stream()
-                .filter(c -> !("Excuse".equals(c.getValeur()) && "Atout".equals(c.getCouleur())))
-                .anyMatch(c -> c.getCouleur().equals(couleurDemandeeFinale));
-
-        boolean possedeAtout = main.stream()
-                .filter(c -> !("Excuse".equals(c.getValeur()) && "Atout".equals(c.getCouleur())))
-                .anyMatch(c -> "Atout".equals(c.getCouleur()));
-
-        if (couleurDemandeeEstAtout) {
-            // La couleur demandée est l'atout → doit jouer atout et monter
-            if (!joueAtout) {
-                if (possedeAtout) {
-                    throw new BusinessException("Vous devez jouer un atout.");
-                }
-                // N'a pas d'atout → défausse libre
-                return;
-            }
-            // Joue atout → doit monter si possible
-            verifierMonteeAtout(main, carteJouee, pli);
-
-        } else {
-            // La couleur demandée est une couleur normale
-            if (!carteJouee.getCouleur().equals(couleurDemandee) && !joueAtout) {
-                if (possedeColoreDemandee) {
-                    throw new BusinessException("Vous devez suivre la couleur demandée (" + couleurDemandee + ").");
-                }
-                if (possedeAtout) {
-                    throw new BusinessException("Vous devez couper avec un atout.");
-                }
-                // N'a pas la couleur ni d'atout → défausse libre
-                return;
-            }
-
-            if (!carteJouee.getCouleur().equals(couleurDemandee) && joueAtout) {
-                // Ne peut couper qu'en l'absence de la couleur demandée
-                if (possedeColoreDemandee) {
-                    throw new BusinessException("Vous devez suivre la couleur demandée (" + couleurDemandee + ").");
-                }
-                // Coupe avec atout → doit monter si possible
-                verifierMonteeAtout(main, carteJouee, pli);
-            }
-        }
-    }
-
-    private void verifierMonteeAtout(List<Carte> main, Carte carteJouee, Pli pli) {
-        // Trouver le plus fort atout déjà joué dans ce pli
-        Optional<Carte> plusFortAtout = pli.getCartesJouees().stream()
-                .filter(c -> "Atout".equals(c.getCouleur()) && !("Excuse".equals(c.getValeur())))
-                .max(Comparator.comparingInt(c -> ORDRE_TRUMP.indexOf(c.getValeur())));
-
-        if (plusFortAtout.isEmpty()) return; // pas encore d'atout dans le pli
-
-        int rangJoue = ORDRE_TRUMP.indexOf(carteJouee.getValeur());
-        int rangMax = ORDRE_TRUMP.indexOf(plusFortAtout.get().getValeur());
-
-        boolean peutMonter = main.stream()
-                .filter(c -> "Atout".equals(c.getCouleur()) && !("Excuse".equals(c.getValeur())))
-                .anyMatch(c -> ORDRE_TRUMP.indexOf(c.getValeur()) > rangMax);
-
-        if (peutMonter && rangJoue <= rangMax) {
-            throw new BusinessException("Vous devez monter à l'atout (jouer un atout plus fort).");
-        }
-    }
 
     // =========================================================
     // TERMINER UN PLI
@@ -881,10 +451,10 @@ public class TarotService {
         int maxPlis = nombreMaxPlis(nbJoueurs);
 
         // Collecter toutes les cartes du preneur (tricks + écartes sauf GARDE_SANS/GARDE_CONTRE)
-        List<Carte> cartesPreneur = collecterCartesPreneur(partie, joueurs);
+        List<Carte> cartesPreneur = tarotEtatService.collecterCartesPreneur(partie, joueurs);
 
         int pointsPreneurX2 = scoringService.calculerPointsX2(cartesPreneur)
-                            + correctionExcuseX2(partie, joueurs);
+                            + tarotEtatService.correctionExcuseX2(partie, joueurs);
         int bouts = scoringService.compterBouts(cartesPreneur);
         
         // Détecter qui a fait le Petit au bout (le dernier pli)
@@ -983,59 +553,6 @@ public class TarotService {
      * quelle que soit l'équipe gagnante du pli.
      * Exception : si l'équipe 1 (attaque) joue l'Excuse au DERNIER pli, elle va à la défense.
      */
-    private List<Carte> collecterCartesPreneur(Partie partie, List<Joueur> joueurs) {
-        List<Carte> cartes = new ArrayList<>();
-        int nbJoueurs = partie.getNbJoueursRequis();
-        int maxPlis = nombreMaxPlis(nbJoueurs);
-
-        List<Pli> plis = pliRepository.findByPartie_IdOrderByNumTourAsc(partieId(partie));
-        for (Pli pli : plis) {
-            List<Carte> cartesDuPli = new ArrayList<>(pli.getCartesJouees());
-            int ouvreur = pli.getJoueurOuvreurIndex();
-            boolean dernierPli = pli.getNumTour() == maxPlis;
-
-            // Détecter l'Excuse dans ce pli et l'équipe qui l'a jouée
-            Carte excuseDuPli = null;
-            int equipeExcuse = -1;
-            for (int i = 0; i < cartesDuPli.size(); i++) {
-                Carte c = cartesDuPli.get(i);
-                if ("Excuse".equals(c.getValeur()) && "Atout".equals(c.getCouleur())) {
-                    final int posFinal = (ouvreur + i) % nbJoueurs;
-                    Joueur joueurExcuse = joueurs.stream()
-                            .filter(j -> j.getPosition() == posFinal)
-                            .findFirst().orElse(null);
-                    if (joueurExcuse != null) equipeExcuse = joueurExcuse.getEquipe();
-                    excuseDuPli = c;
-                    break;
-                }
-            }
-
-            if (pli.getGagnantEquipe() == 1) {
-                // Pli gagné par le preneur — toutes les cartes lui reviennent…
-                cartes.addAll(cartesDuPli);
-                // … sauf l'Excuse si elle a été jouée par la défense (retourne à l'équipe 2)
-                if (excuseDuPli != null && equipeExcuse == 2) {
-                    cartes.remove(excuseDuPli);
-                }
-            } else {
-                // Pli gagné par les défenseurs — rien pour le preneur…
-                // … sauf l'Excuse s'il l'a jouée, SAUF au dernier pli (exception officielle FFT)
-                if (excuseDuPli != null && equipeExcuse == 1 && !dernierPli) {
-                    cartes.add(excuseDuPli);
-                }
-            }
-        }
-
-        // Écartes comptent pour le preneur (PETITE/GARDE uniquement)
-        String enchereType = partie.getEnchereType();
-        if ("PETITE".equals(enchereType) || "GARDE".equals(enchereType)) {
-            cartes.addAll(partie.getEcartes());
-        }
-
-        // GARDE_SANS / GARDE_CONTRE : le chien s'ajoute aux défenseurs (ne compte pas pour le preneur)
-
-        return cartes;
-    }
 
     private Long partieId(Partie partie) {
         return partie.getId();
@@ -1069,13 +586,6 @@ public class TarotService {
     }
 
     /** Ordre de tri d'une carte pour afficher la main de façon lisible. */
-    private int ordreCarte(Carte c) {
-        if ("Atout".equals(c.getCouleur())) {
-            if ("Excuse".equals(c.getValeur())) return -1;
-            return ORDRE_TRUMP.indexOf(c.getValeur());
-        }
-        return ORDRE_SUIT.indexOf(c.getValeur());
-    }
 
     /**
      * Correction de ±0,5 pt (±1 en ×2) liée à la règle de compensation de l'Excuse.
@@ -1092,91 +602,7 @@ public class TarotService {
      * Exception : dernier pli + preneur joue l'Excuse → l'Excuse va déjà à la défense,
      * pas de compensation supplémentaire.
      */
-    private int correctionExcuseX2(Partie partie, List<Joueur> joueurs) {
-        int nbJoueurs = partie.getNbJoueursRequis();
-        int maxPlis   = nombreMaxPlis(nbJoueurs);
-        int correction = 0;
 
-        List<Pli> plis = pliRepository.findByPartie_IdOrderByNumTourAsc(partieId(partie));
-        for (Pli pli : plis) {
-            List<Carte> cartesDuPli = pli.getCartesJouees();
-            int ouvreur    = pli.getJoueurOuvreurIndex();
-            boolean dernier = pli.getNumTour() == maxPlis;
-
-            for (int i = 0; i < cartesDuPli.size(); i++) {
-                Carte c = cartesDuPli.get(i);
-                if (!("Excuse".equals(c.getValeur()) && "Atout".equals(c.getCouleur()))) continue;
-
-                final int posFinal = (ouvreur + i) % nbJoueurs;
-                Joueur joueurExcuse = joueurs.stream()
-                        .filter(j -> j.getPosition() == posFinal)
-                        .findFirst().orElse(null);
-                if (joueurExcuse == null) break;
-
-                int equipeExcuse   = joueurExcuse.getEquipe();
-                int equipeGagnante = pli.getGagnantEquipe();
-
-                // Compensation uniquement quand l'Excuse change de camp (hors exception dernier pli)
-                if (equipeExcuse != equipeGagnante && !dernier) {
-                    if (equipeExcuse == 1) {
-                        // Preneur a joué l'Excuse, défense a gagné → preneur cède 0,5 à défense
-                        correction -= 1;
-                    } else {
-                        // Défenseur a joué l'Excuse, preneur a gagné → défense cède 0,5 au preneur
-                        correction += 1;
-                    }
-                }
-                break; // une seule Excuse possible par pli
-            }
-        }
-        return correction;
-    }
-
-    private EtatTarotDTO.ResultatTarotDTO buildResultatTarot(Partie partie, List<Joueur> joueurs) {
-        EtatTarotDTO.ResultatTarotDTO r = new EtatTarotDTO.ResultatTarotDTO();
-        r.setEnchereType(partie.getEnchereType());
-        r.setMultiplicateur(partie.getMultiplicateur());
-
-        // Trouver le pseudo du preneur
-        joueurs.stream()
-                .filter(j -> j.getId().equals(partie.getPreneurId()))
-                .findFirst()
-                .ifPresent(j -> r.setPseudoPreneur(j.getUtilisateur().getPseudo()));
-
-        // 5j : pseudo du partenaire (null si solo ou 3j/4j)
-        if (partie.getPartenaireId() != null) {
-            joueurs.stream()
-                    .filter(j -> j.getId().equals(partie.getPartenaireId()))
-                    .findFirst()
-                    .ifPresent(j -> r.setPseudoPartenaire(j.getUtilisateur().getPseudo()));
-        }
-
-        // Recalculer les stats depuis les plis
-        List<Carte> cartesPreneur = collecterCartesPreneur(partie, joueurs);
-        int pointsX2 = scoringService.calculerPointsX2(cartesPreneur)
-                     + correctionExcuseX2(partie, joueurs);
-        int bouts = scoringService.compterBouts(cartesPreneur);
-        int seuil = scoringService.seuilPourBouts(bouts);
-        boolean petitAuBoutDefense = false;
-        List<Pli> plis = pliRepository.findByPartie_IdOrderByNumTourAsc(partie.getId());
-        int maxPlis = nombreMaxPlis(partie.getNbJoueursRequis());
-        Pli dernierPli = plis.stream().filter(p -> p.getNumTour() == maxPlis).findFirst().orElse(null);
-        if (dernierPli != null && dernierPli.getCartesJouees().stream().anyMatch(c -> "Atout".equals(c.getCouleur()) && "1".equals(c.getValeur()))) {
-            if (dernierPli.getGagnantEquipe() != 1) petitAuBoutDefense = true;
-        }
-
-        int score = scoringService.calculerScore(
-                pointsX2, bouts, partie.getEnchereType(), partie.isPetitAuBoutPreneur(), petitAuBoutDefense
-        ); r.setPointsPreneurX2(pointsX2);
-        r.setBoutsPreneur(bouts);
-        r.setSeuil(seuil);
-        r.setContratRempli(score > 0);
-        r.setScorePartie(Math.abs(score));
-        r.setPetitAuBout(partie.isPetitAuBoutPreneur());
-        r.setGagnantEquipe(score > 0 ? 1 : 2);
-
-        return r;
-    }
 
     // =========================================================
     // PETIT SEC

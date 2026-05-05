@@ -1,12 +1,12 @@
 package fr.enseeiht.jeux;
 
-import fr.enseeiht.jeux.dto.EtatJeuTarotDTO;
+import fr.enseeiht.jeux.tarot.EtatTarotDTO;
 import fr.enseeiht.jeux.exception.BusinessException;
 import fr.enseeiht.jeux.modele.*;
 import fr.enseeiht.jeux.repository.*;
 import fr.enseeiht.jeux.service.PartieService;
-import fr.enseeiht.jeux.service.TarotScoringService;
-import fr.enseeiht.jeux.service.TarotService;
+import fr.enseeiht.jeux.tarot.TarotScoringService;
+import fr.enseeiht.jeux.tarot.TarotService;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -346,7 +346,7 @@ class TarotTest {
         @DisplayName("getEtatJeuTarot retourne typeJeu TAROT et statut EN_ENCHERE")
         @Transactional
         void getEtatJeu_typeJeuTarot() {
-            EtatJeuTarotDTO etat = tarotService.getEtatJeuTarot(partie.getId(), u1.getId());
+            EtatTarotDTO etat = tarotService.getEtatJeuTarot(partie.getId(), u1.getId());
             assertThat(etat.getStatut()).isEqualTo("EN_ENCHERE");
             assertThat(etat.getMaMain()).hasSize(18);
         }
@@ -772,7 +772,7 @@ class TarotTest {
             Joueur actif = joueurs.stream().filter(j -> j.getPosition() == p.getTourJoueurIndex()).findFirst().orElseThrow();
             Carte carte = actif.getCartesEnMain().get(0);
 
-            EtatJeuTarotDTO etat = tarotService.jouerCarte(partieId, actif.getUtilisateur().getId(), carte.getId());
+            EtatTarotDTO etat = tarotService.jouerCarte(partieId, actif.getUtilisateur().getId(), carte.getId());
             assertThat(etat.getPliCourant()).hasSize(1);
         }
 

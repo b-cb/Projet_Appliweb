@@ -25,7 +25,7 @@ fi
 # 1. Lancement du backend (Spring Boot)
 echo "☕ Démarrage du Back-end (Spring Boot)..."
 cd backend-cartes
-./mvnw spring-boot:run &
+./mvnw spring-boot:run -Dmaven.test.skip=true &
 BACKEND_PID=$!
 cd ..
 

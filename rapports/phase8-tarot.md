@@ -73,10 +73,10 @@ OUVERTE
   ──demarrerPartie()──▶  EN_ENCHERE / phaseJeu=null
 
 EN_ENCHERE / null
-  ──enchirirTarot gagnée (3j/4j, PETITE|GARDE)──▶  EN_ENCHERE / CHIEN
-  ──enchirirTarot gagnée (3j/4j, GARDE_SANS)────▶  EN_ENCHERE / CHIEN_VU
-  ──enchirirTarot gagnée (3j/4j, GARDE_CONTRE)──▶  EN_JEU / JEU
-  ──enchirirTarot gagnée (5j, toute enchère)────▶  EN_ENCHERE / APPEL_ROI
+  ──encherirTarot gagnée (3j/4j, PETITE|GARDE)──▶  EN_ENCHERE / CHIEN
+  ──encherirTarot gagnée (3j/4j, GARDE_SANS)────▶  EN_ENCHERE / CHIEN_VU
+  ──encherirTarot gagnée (3j/4j, GARDE_CONTRE)──▶  EN_JEU / JEU
+  ──encherirTarot gagnée (5j, toute enchère)────▶  EN_ENCHERE / APPEL_ROI
   ──tous passent──▶  BusinessException
 
 EN_ENCHERE / APPEL_ROI  (5j uniquement)

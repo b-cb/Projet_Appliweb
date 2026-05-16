@@ -5,12 +5,9 @@ import fr.enseeiht.jeux.exception.BusinessException;
 import fr.enseeiht.jeux.exception.ResourceNotFoundException;
 import fr.enseeiht.jeux.modele.*;
 import fr.enseeiht.jeux.repository.*;
-import org.springframework.context.annotation.Lazy;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -78,7 +75,6 @@ public class JeuService {
     private final EnchereRepository enchereRepository;
     private final PliRepository pliRepository;
     private final SimpMessagingTemplate messagingTemplate;
-    private final BotService botService;
     private final CarteRepository carteRepository;
 
     public JeuService(PartieRepository partieRepository,
@@ -87,7 +83,6 @@ public class JeuService {
             EnchereRepository enchereRepository,
             PliRepository pliRepository,
             SimpMessagingTemplate messagingTemplate,
-            @Lazy BotService botService,
             CarteRepository carteRepository) {
         this.partieRepository = partieRepository;
         this.joueurRepository = joueurRepository;
@@ -95,7 +90,6 @@ public class JeuService {
         this.enchereRepository = enchereRepository;
         this.pliRepository = pliRepository;
         this.messagingTemplate = messagingTemplate;
-        this.botService = botService;
         this.carteRepository = carteRepository;
     }
 
@@ -114,9 +108,6 @@ public class JeuService {
         }
     }
 
-    // =========================================================
-    // ÉTAT DU JEU
-    // =========================================================
 
     public EtatJeuDTO getEtatJeu(Long partieId, Long utilisateurId) {
         Partie partie = partieRepository.findById(partieId)
@@ -238,9 +229,6 @@ public class JeuService {
         return dto;
     }
 
-    // =========================================================
-    // ENCHÈRES
-    // =========================================================
 
     public EtatJeuDTO encherir(Long partieId, Long utilisateurId, Integer contrat, String couleur, boolean passe) {
         Partie partie = partieRepository.findById(partieId)
@@ -260,7 +248,7 @@ public class JeuService {
             throw new BusinessException("Ce n'est pas votre tour d'enchérir.");
         }
 
-        // --- Cas : la donne est coinchée (enchères classiques interdites) ---
+        // donne déjà coinchée : seul le passe ou la surcoinche sont autorisés
         if (partie.getCoinche() == 1) {
             if (!passe) {
                 throw new BusinessException("La donne est coinchée : vous ne pouvez que passer ou surcoincher.");
@@ -297,17 +285,9 @@ public class JeuService {
                     ? EvenementJeuDTO.Type.CARTE_JOUEE
                     : EvenementJeuDTO.Type.ENCHERE;
             pushEtatATous(partieId, joueurs, typeEvt);
-            final Long partieIdFinalC = partieId;
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    botService.jouerSiTourDuBot(partieIdFinalC);
-                }
-            });
-            return getEtatJeu(partieId, utilisateurId);
+        return getEtatJeu(partieId, utilisateurId);
         }
 
-        // --- Enchères normales (coinche == 0) ---
         if (passe) {
             // Enregistrer le passe
             Enchere e = new Enchere();
@@ -319,9 +299,12 @@ public class JeuService {
 
             partie.setPassesConsecutives(partie.getPassesConsecutives() + 1);
 
-            // Si 4 passes consécutives sans contrat → relancer la donne (reset)
+            // Si tout le monde a passé sans contrat → nouvelle donne automatique
             if (partie.getPassesConsecutives() >= 4) {
-                throw new BusinessException("Quatre passes consécutives : la donne est annulée. Redémarrez la partie.");
+                partie.setDonneActuelle(partie.getDonneActuelle() + 1);
+                redemarrerDonneCoinche(partie, joueurs);
+                pushEtatATous(partieId, joueurs, EvenementJeuDTO.Type.ENCHERE);
+                return getEtatJeu(partieId, utilisateurId);
             }
         } else {
             // Valider l'enchère
@@ -377,14 +360,6 @@ public class JeuService {
 
         // Déclencher le bot après le commit (évite la lecture de données pas encore
         // commitées)
-        final Long partieIdFinal = partieId;
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                botService.jouerSiTourDuBot(partieIdFinal);
-            }
-        });
-
         return getEtatJeu(partieId, utilisateurId);
     }
 
@@ -422,9 +397,6 @@ public class JeuService {
         return passesDepuisDernierContrat >= 3;
     }
 
-    // =========================================================
-    // JOUER UNE CARTE
-    // =========================================================
 
     public EtatJeuDTO jouerCarte(Long partieId, Long utilisateurId, Long carteId) {
         Partie partie = partieRepository.findById(partieId)
@@ -498,13 +470,6 @@ public class JeuService {
         // Déclencher le bot après le commit (évite la lecture de données pas encore
         // commitées)
         if (!"TERMINEE".equals(partie.getStatut())) {
-            final Long partieIdFinal = partieId;
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    botService.jouerSiTourDuBot(partieIdFinal);
-                }
-            });
         }
 
         return getEtatJeu(partieId, utilisateurId);
@@ -524,7 +489,7 @@ public class JeuService {
         List<Carte> main = joueur.getCartesEnMain();
         boolean possedeColoreDemandee = main.stream().anyMatch(c -> c.getCouleur().equals(couleurDemandee));
 
-        // --- Mode Sans-atout : uniquement l'obligation de suivre la couleur ---
+        // sans-atout : pas de coupe, juste le suivi de couleur
         if ("Sans-atout".equals(atout)) {
             if (!carteJouee.getCouleur().equals(couleurDemandee) && possedeColoreDemandee) {
                 throw new BusinessException("Vous devez suivre la couleur demandée (" + couleurDemandee + ").");
@@ -532,7 +497,7 @@ public class JeuService {
             return; // pas d'atout → pas de coupe ni de montée inter-couleurs
         }
 
-        // --- Mode Tout-atout : chaque couleur est son propre atout ---
+        // tout-atout : chaque couleur se comporte comme un atout
         if ("Tout-atout".equals(atout)) {
             if (!carteJouee.getCouleur().equals(couleurDemandee)) {
                 if (possedeColoreDemandee) {
@@ -558,7 +523,6 @@ public class JeuService {
             return;
         }
 
-        // --- Mode coinche normal (atout = couleur) ---
         boolean possedeAtout = main.stream().anyMatch(c -> c.getCouleur().equals(atout));
 
         // Déterminer l'équipe du joueur courant et du maître en cours
@@ -884,9 +848,6 @@ public class JeuService {
         partieRepository.save(partie);
     }
 
-    // =========================================================
-    // COINCHE / SURCOINCHE
-    // =========================================================
 
     /**
      * Coinche : un adversaire du preneur double le contrat (×2).
@@ -926,8 +887,6 @@ public class JeuService {
         int equipeJoueur = monJoueur.getEquipe();
 
         if (surcoinche) {
-            // --- SURCOINCHE ---
-            // Pré-conditions
             if (partie.getCoinche() != 1) {
                 throw new BusinessException("La surcoinche n'est possible qu'après une coinche.");
             }
@@ -942,8 +901,6 @@ public class JeuService {
             demarrerJeuDepuisEnchere(partie);
 
         } else {
-            // --- COINCHE ---
-            // Pré-conditions
             if (partie.getCoinche() != 0) {
                 throw new BusinessException("La donne est déjà coinchée ou surcoinchée.");
             }
@@ -970,20 +927,9 @@ public class JeuService {
         pushEtatATous(partieId, joueurs, typeEvt);
 
         // Déclencher le bot si nécessaire après commit
-        final Long partieIdFinal = partieId;
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override
-            public void afterCommit() {
-                botService.jouerSiTourDuBot(partieIdFinal);
-            }
-        });
-
         return getEtatJeu(partieId, utilisateurId);
     }
 
-    // =========================================================
-    // HELPERS
-    // =========================================================
 
     private String capitalise(String s) {
         if (s == null || s.isBlank())

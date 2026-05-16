@@ -1,7 +1,5 @@
 package fr.enseeiht.jeux.service;
 
-import fr.enseeiht.jeux.coinche.CoincheBotService;
-import fr.enseeiht.jeux.coinche.CoincheService;
 import fr.enseeiht.jeux.config.BotInitializer;
 import fr.enseeiht.jeux.dto.*;
 import fr.enseeiht.jeux.exception.BusinessException;
@@ -23,8 +21,8 @@ public class PartieService {
     private final UtilisateurRepository utilisateurRepository;
     private final CarteRepository carteRepository;
     private final SimpMessagingTemplate messagingTemplate;
-    private final CoincheService jeuService;
-    private final CoincheBotService botService;
+    private final JeuService jeuService;
+    private final BotService botService;
     private final TarotService tarotService;
 
     public PartieService(PartieRepository partieRepository,
@@ -32,8 +30,8 @@ public class PartieService {
                          UtilisateurRepository utilisateurRepository,
                          CarteRepository carteRepository,
                          SimpMessagingTemplate messagingTemplate,
-                         CoincheService jeuService,
-                         @Lazy CoincheBotService botService,
+                         JeuService jeuService,
+                         @Lazy BotService botService,
                          @Lazy TarotService tarotService) {
         this.partieRepository = partieRepository;
         this.joueurRepository = joueurRepository;
@@ -192,7 +190,7 @@ public class PartieService {
         // Push WebSocket personnalisé par joueur
         List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);
         for (Joueur j : joueursActualises) {
-            EtatCoincheDTO etat = jeuService.getEtatJeu(partieId, j.getUtilisateur().getId());
+            EtatJeuDTO etat = jeuService.getEtatJeu(partieId, j.getUtilisateur().getId());
             messagingTemplate.convertAndSend(
                     "/topic/partie/" + partieId + "/joueur/" + j.getUtilisateur().getId(),
                     EvenementJeuDTO.of(EvenementJeuDTO.Type.ENCHERE, etat)
@@ -401,7 +399,7 @@ public class PartieService {
         // Push WebSocket : tous les joueurs reçoivent le nouvel état
         List<Joueur> joueursActualisesPost = joueurRepository.findByPartie_Id(partieId);
         for (Joueur j : joueursActualisesPost) {
-            EtatCoincheDTO etat = jeuService.getEtatJeu(partieId, j.getUtilisateur().getId());
+            EtatJeuDTO etat = jeuService.getEtatJeu(partieId, j.getUtilisateur().getId());
             messagingTemplate.convertAndSend(
                     "/topic/partie/" + partieId + "/joueur/" + j.getUtilisateur().getId(),
                     EvenementJeuDTO.of(EvenementJeuDTO.Type.ENCHERE, etat)

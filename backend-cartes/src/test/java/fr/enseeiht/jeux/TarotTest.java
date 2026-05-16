@@ -1,12 +1,12 @@
 package fr.enseeiht.jeux;
 
-import fr.enseeiht.jeux.dto.EtatJeuTarotDTO;
+import fr.enseeiht.jeux.tarot.EtatTarotDTO;
 import fr.enseeiht.jeux.exception.BusinessException;
 import fr.enseeiht.jeux.modele.*;
 import fr.enseeiht.jeux.repository.*;
 import fr.enseeiht.jeux.service.PartieService;
-import fr.enseeiht.jeux.service.TarotScoringService;
-import fr.enseeiht.jeux.service.TarotService;
+import fr.enseeiht.jeux.tarot.TarotScoringService;
+import fr.enseeiht.jeux.tarot.TarotService;
 import org.junit.jupiter.api.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -346,7 +346,7 @@ class TarotTest {
         @DisplayName("getEtatJeuTarot retourne typeJeu TAROT et statut EN_ENCHERE")
         @Transactional
         void getEtatJeu_typeJeuTarot() {
-            EtatJeuTarotDTO etat = tarotService.getEtatJeuTarot(partie.getId(), u1.getId());
+            EtatTarotDTO etat = tarotService.getEtatJeuTarot(partie.getId(), u1.getId());
             assertThat(etat.getStatut()).isEqualTo("EN_ENCHERE");
             assertThat(etat.getMaMain()).hasSize(18);
         }
@@ -427,7 +427,7 @@ class TarotTest {
                     .map(j -> j.getUtilisateur())
                     .findFirst().orElseThrow();
 
-            assertThatThrownBy(() -> tarotService.enchirirTarot(partie.getId(), horsJoueur.getId(), "PETITE"))
+            assertThatThrownBy(() -> tarotService.encherirTarot(partie.getId(), horsJoueur.getId(), "PETITE"))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("tour");
         }
@@ -438,7 +438,7 @@ class TarotTest {
             // Faire enchérir le 1er joueur en GARDE
             List<Joueur> joueurs = joueurRepository.findByPartie_Id(partie.getId());
             Joueur j0 = joueurs.stream().filter(j -> j.getPosition() == partie.getTourJoueurIndex()).findFirst().orElseThrow();
-            tarotService.enchirirTarot(partie.getId(), j0.getUtilisateur().getId(), "GARDE");
+            tarotService.encherirTarot(partie.getId(), j0.getUtilisateur().getId(), "GARDE");
 
             // Le 2e joueur tente PETITE → doit échouer
             Partie pActualisee = partieRepository.findById(partie.getId()).orElseThrow();
@@ -446,7 +446,7 @@ class TarotTest {
             Joueur j1 = joueursAct.stream().filter(j -> j.getPosition() == pActualisee.getTourJoueurIndex()).findFirst().orElseThrow();
             final Long partieId = partie.getId();
             final Long uid = j1.getUtilisateur().getId();
-            assertThatThrownBy(() -> tarotService.enchirirTarot(partieId, uid, "PETITE"))
+            assertThatThrownBy(() -> tarotService.encherirTarot(partieId, uid, "PETITE"))
                     .isInstanceOf(BusinessException.class)
                     .hasMessageContaining("plus haut");
         }
@@ -458,7 +458,7 @@ class TarotTest {
             Joueur actif = joueurs.stream().filter(j -> j.getPosition() == partie.getTourJoueurIndex()).findFirst().orElseThrow();
             Long uid = actif.getUtilisateur().getId();
             Long pid = partie.getId();
-            assertThatThrownBy(() -> tarotService.enchirirTarot(pid, uid, ""))
+            assertThatThrownBy(() -> tarotService.encherirTarot(pid, uid, ""))
                     .isInstanceOf(BusinessException.class);
         }
 
@@ -473,7 +473,7 @@ class TarotTest {
                 Partie p = partieRepository.findById(partieId).orElseThrow();
                 List<Joueur> js = joueurRepository.findByPartie_Id(partieId);
                 Joueur actif = js.stream().filter(j -> j.getPosition() == p.getTourJoueurIndex()).findFirst().orElseThrow();
-                tarotService.enchirirTarot(partieId, actif.getUtilisateur().getId(), "PASSE");
+                tarotService.encherirTarot(partieId, actif.getUtilisateur().getId(), "PASSE");
             }
 
             // Après que tous ont passé → une nouvelle donne est redistribuée
@@ -494,7 +494,7 @@ class TarotTest {
         void gardeContre_lanceLejeuDirectement() {
             List<Joueur> joueurs = joueurRepository.findByPartie_Id(partie.getId());
             Joueur actif = joueurs.stream().filter(j -> j.getPosition() == partie.getTourJoueurIndex()).findFirst().orElseThrow();
-            tarotService.enchirirTarot(partie.getId(), actif.getUtilisateur().getId(), "GARDE_CONTRE");
+            tarotService.encherirTarot(partie.getId(), actif.getUtilisateur().getId(), "GARDE_CONTRE");
 
             Partie p = partieRepository.findById(partie.getId()).orElseThrow();
             assertThat(p.getStatut()).isEqualTo("EN_JEU");
@@ -512,14 +512,14 @@ class TarotTest {
             // Le 1er joueur enchérit en PETITE
             List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
             Joueur j0 = joueurs.stream().filter(j -> j.getPosition() == partie.getTourJoueurIndex()).findFirst().orElseThrow();
-            tarotService.enchirirTarot(partieId, j0.getUtilisateur().getId(), "PETITE");
+            tarotService.encherirTarot(partieId, j0.getUtilisateur().getId(), "PETITE");
 
             // Les 3 autres passent
             for (int i = 0; i < 3; i++) {
                 Partie p = partieRepository.findById(partieId).orElseThrow();
                 List<Joueur> js = joueurRepository.findByPartie_Id(partieId);
                 Joueur actif = js.stream().filter(j -> j.getPosition() == p.getTourJoueurIndex()).findFirst().orElseThrow();
-                tarotService.enchirirTarot(partieId, actif.getUtilisateur().getId(), "PASSE");
+                tarotService.encherirTarot(partieId, actif.getUtilisateur().getId(), "PASSE");
             }
 
             Partie p = partieRepository.findById(partieId).orElseThrow();
@@ -537,14 +537,14 @@ class TarotTest {
 
             List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
             Joueur j0 = joueurs.stream().filter(j -> j.getPosition() == partie.getTourJoueurIndex()).findFirst().orElseThrow();
-            tarotService.enchirirTarot(partieId, j0.getUtilisateur().getId(), "GARDE_SANS");
+            tarotService.encherirTarot(partieId, j0.getUtilisateur().getId(), "GARDE_SANS");
 
             // Les 3 autres passent
             for (int i = 0; i < 3; i++) {
                 Partie p = partieRepository.findById(partieId).orElseThrow();
                 List<Joueur> js = joueurRepository.findByPartie_Id(partieId);
                 Joueur actif = js.stream().filter(j -> j.getPosition() == p.getTourJoueurIndex()).findFirst().orElseThrow();
-                tarotService.enchirirTarot(partieId, actif.getUtilisateur().getId(), "PASSE");
+                tarotService.encherirTarot(partieId, actif.getUtilisateur().getId(), "PASSE");
             }
 
             Partie p = partieRepository.findById(partieId).orElseThrow();
@@ -574,14 +574,14 @@ class TarotTest {
             List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
             Joueur j0 = joueurs.stream().filter(j -> j.getPosition() == p.getTourJoueurIndex()).findFirst().orElseThrow();
             preneurUserId = j0.getUtilisateur().getId();
-            tarotService.enchirirTarot(partieId, preneurUserId, "PETITE");
+            tarotService.encherirTarot(partieId, preneurUserId, "PETITE");
 
             // Les 3 autres passent
             for (int i = 0; i < 3; i++) {
                 Partie pAct = partieRepository.findById(partieId).orElseThrow();
                 List<Joueur> js = joueurRepository.findByPartie_Id(partieId);
                 Joueur actif = js.stream().filter(j -> j.getPosition() == pAct.getTourJoueurIndex()).findFirst().orElseThrow();
-                tarotService.enchirirTarot(partieId, actif.getUtilisateur().getId(), "PASSE");
+                tarotService.encherirTarot(partieId, actif.getUtilisateur().getId(), "PASSE");
             }
         }
 
@@ -719,7 +719,7 @@ class TarotTest {
             preneurUserId = j0.getUtilisateur().getId();
 
             // GARDE_CONTRE → EN_JEU immédiat
-            tarotService.enchirirTarot(partieId, preneurUserId, "GARDE_CONTRE");
+            tarotService.encherirTarot(partieId, preneurUserId, "GARDE_CONTRE");
         }
 
         @Test
@@ -772,7 +772,7 @@ class TarotTest {
             Joueur actif = joueurs.stream().filter(j -> j.getPosition() == p.getTourJoueurIndex()).findFirst().orElseThrow();
             Carte carte = actif.getCartesEnMain().get(0);
 
-            EtatJeuTarotDTO etat = tarotService.jouerCarte(partieId, actif.getUtilisateur().getId(), carte.getId());
+            EtatTarotDTO etat = tarotService.jouerCarte(partieId, actif.getUtilisateur().getId(), carte.getId());
             assertThat(etat.getPliCourant()).hasSize(1);
         }
 

@@ -11,13 +11,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Joue automatiquement pour les bots.
- *
- * Chaque appel à jouerSiTourDuBot() joue UN SEUL coup si c'est le tour d'un bot.
- * Le chaînage entre bots consécutifs est assuré par les hooks afterCommit
- * dans JeuService (qui rappellent jouerSiTourDuBot après chaque transaction).
- */
+// Joue automatiquement les coups des bots. S'auto-chaîne jusqu'au prochain joueur humain.
 @Service
 public class BotService {
 
@@ -35,15 +29,10 @@ public class BotService {
         this.jeuService = jeuService;
     }
 
-    /**
-     * Joue un seul coup si le joueur actif est un bot.
-     * Appelé en @Async (nouveau thread) depuis les hooks afterCommit de JeuService.
-     */
     @Async
     public void jouerSiTourDuBot(Long partieId) {
-        try { Thread.sleep(1200); } catch (InterruptedException ignored) { return; }
+        try { Thread.sleep(900); } catch (InterruptedException ignored) { return; }
 
-        // Lecture fraîche depuis la BDD (pas de cache Hibernate)
         Partie partie = partieRepository.findById(partieId).orElse(null);
         if (partie == null) return;
 
@@ -55,45 +44,36 @@ public class BotService {
                 .filter(j -> j.getPosition() == partie.getTourJoueurIndex())
                 .findFirst().orElse(null);
 
-        if (joueurActif == null || !joueurActif.getUtilisateur().isBot()) {
-            log.debug("Partie {} : tour du joueur {} (pas un bot), arrêt", partieId,
-                    joueurActif != null ? joueurActif.getUtilisateur().getPseudo() : "null");
-            return;
-        }
+        if (joueurActif == null || !joueurActif.getUtilisateur().isBot()) return;
 
         String botPseudo = joueurActif.getUtilisateur().getPseudo();
         Long botUserId = joueurActif.getUtilisateur().getId();
-        log.info("Partie {} : {} (userId={}) joue — statut={}", partieId, botPseudo, botUserId, statut);
 
+        boolean aJoue = false;
         try {
             if ("EN_ENCHERE".equals(statut)) {
                 jouerEnchere(partieId, botUserId, partie, botPseudo);
+                aJoue = true;
             } else if ("EN_JEU".equals(statut)) {
-                // Recharger le joueur pour avoir la main à jour
                 Joueur joueurFrais = joueurRepository.findById(joueurActif.getId()).orElse(null);
-                if (joueurFrais == null) {
-                    log.error("Partie {} : joueur {} introuvable après rechargement", partieId, botPseudo);
-                    return;
+                if (joueurFrais != null) {
+                    jouerCarte(partieId, botUserId, joueurFrais, botPseudo);
+                    aJoue = true;
                 }
-                jouerCarte(partieId, botUserId, joueurFrais, botPseudo);
             }
         } catch (Exception e) {
-            log.error("Partie {} : exception inattendue pour {} : {}", partieId, botPseudo, e.getMessage(), e);
+            log.error("Bot {} dans partie {} : {}", botPseudo, partieId, e.getMessage());
         }
-        // Le prochain bot sera déclenché par le hook afterCommit de JeuService
+
+        // enchaîner si le joueur suivant est aussi un bot
+        if (aJoue) jouerSiTourDuBot(partieId);
     }
 
     private void jouerEnchere(Long partieId, Long botUserId, Partie partie, String botPseudo) {
         try {
-            if (partie.getContratValeur() == 0) {
-                log.info("{} enchérit 80 Coeur dans partie {}", botPseudo, partieId);
-                jeuService.encherir(partieId, botUserId, 80, "Coeur", false);
-            } else {
-                log.info("{} passe dans partie {}", botPseudo, partieId);
-                jeuService.encherir(partieId, botUserId, null, null, true);
-            }
+            jeuService.encherir(partieId, botUserId, null, null, true);
         } catch (Exception e) {
-            log.error("{} ne peut pas enchérir dans partie {} : {}", botPseudo, partieId, e.getMessage());
+            log.error("{} ne peut pas passer dans partie {} : {}", botPseudo, partieId, e.getMessage());
         }
     }
 

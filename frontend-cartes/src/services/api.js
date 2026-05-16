@@ -156,7 +156,7 @@ export async function fetchEtatJeuTarot(token, partieId, utilisateurId) {
   return res.ok ? res.json() : null
 }
 
-export async function enchirirTarot(token, partieId, utilisateurId, typeBid) {
+export async function encherirTarot(token, partieId, utilisateurId, typeBid) {
   const res = await fetch(`${BASE}/partie/${partieId}/tarot/encherir?utilisateurId=${utilisateurId}`, {
     method: 'POST', headers: headers(token), body: JSON.stringify({ typeBid })
   })

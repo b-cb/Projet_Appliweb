@@ -53,8 +53,6 @@ public class EtatJeuDTO {
 
     public EtatJeuDTO() {}
 
-    // --- Getters / Setters ---
-
     public Long getPartieId() { return partieId; }
     public void setPartieId(Long partieId) { this.partieId = partieId; }
 
@@ -133,7 +131,6 @@ public class EtatJeuDTO {
     public int getPreneurEquipe() { return preneurEquipe; }
     public void setPreneurEquipe(int preneurEquipe) { this.preneurEquipe = preneurEquipe; }
 
-    // --- Inner DTO : une carte dans le pli courant + qui l'a jouée ---
     public static class CartePliDTO {
         private CarteDTO carte;
         private String pseudo;

@@ -1,39 +1,41 @@
 package fr.enseeiht.jeux.tarot;
 
-import fr.enseeiht.jeux.dto.*;
-import fr.enseeiht.jeux.tarot.EtatTarotDTO;
-import fr.enseeiht.jeux.exception.BusinessException;
-import fr.enseeiht.jeux.exception.ResourceNotFoundException;
-import fr.enseeiht.jeux.modele.*;
-import fr.enseeiht.jeux.repository.*;
-import org.springframework.context.annotation.Lazy;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionSynchronization;
-import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import fr.enseeiht.jeux.dto.CarteDTO;
+import fr.enseeiht.jeux.dto.EnchereDTO;
+import fr.enseeiht.jeux.dto.EvenementJeuDTO;
+import fr.enseeiht.jeux.exception.BusinessException;
+import fr.enseeiht.jeux.exception.ResourceNotFoundException;
+import fr.enseeiht.jeux.modele.Carte;
+import fr.enseeiht.jeux.modele.Enchere;
+import fr.enseeiht.jeux.modele.Joueur;
+import fr.enseeiht.jeux.modele.Partie;
+import fr.enseeiht.jeux.modele.Pli;
+import fr.enseeiht.jeux.modele.Utilisateur;
+import fr.enseeiht.jeux.repository.EnchereRepository;
+import fr.enseeiht.jeux.repository.JoueurRepository;
+import fr.enseeiht.jeux.repository.PartieRepository;
+import fr.enseeiht.jeux.repository.PliRepository;
+import fr.enseeiht.jeux.repository.UtilisateurRepository;
 
-/**
- * Logique de jeu pour le Tarot français (3/4 joueurs).
- *
- * State machine statut × phaseJeu :
- *   OUVERTE           → (demarrerPartie) → EN_ENCHERE / phaseJeu=null
- *   EN_ENCHERE / null → (enchirirTarot gagnée)
- *     PETITE/GARDE    → EN_ENCHERE / phaseJeu="CHIEN"
- *     GARDE_SANS      → EN_ENCHERE / phaseJeu="CHIEN_VU"  (vue uniquement, pas d'écart)
- *     GARDE_CONTRE    → EN_JEU    / phaseJeu="JEU"
- *   EN_ENCHERE / CHIEN     → (ecarterCartes) → EN_JEU / phaseJeu="JEU"
- *   EN_ENCHERE / CHIEN_VU  → (confirmerChien) → EN_JEU / phaseJeu="JEU"
- *   EN_JEU / JEU           → (jouerCarte × N_plis) → TERMINEE
- */
+// Logique de jeu pour le Tarot (3, 4 ou 5 joueurs).
+// La progression passe par statut (EN_ENCHERE → EN_JEU → TERMINEE) et phaseJeu
+// (null → CHIEN / CHIEN_VU / APPEL_ROI → JEU).
 @Service
 @Transactional
 public class TarotService {
 
-    // Ordre force des atouts (1 = le Petit, 21 = le Monde ; Excuse est hors classement)
+    // Ordre des atouts (1 = le Petit, 21 = le Monde ; Excuse est hors classement)
     private static final List<String> ORDRE_TRUMP =
             List.of("1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21");
 
@@ -52,7 +54,6 @@ public class TarotService {
     private final PliRepository pliRepository;
     private final TarotScoringService scoringService;
     private final SimpMessagingTemplate messagingTemplate;
-    private final TarotBotService tarotBotService;
     private final fr.enseeiht.jeux.repository.CarteRepository carteRepository;
 
     public TarotService(PartieRepository partieRepository,
@@ -62,7 +63,6 @@ public class TarotService {
                         PliRepository pliRepository,
                         TarotScoringService scoringService,
                         SimpMessagingTemplate messagingTemplate,
-                        @Lazy TarotBotService tarotBotService,
                         fr.enseeiht.jeux.repository.CarteRepository carteRepository) {
         this.partieRepository = partieRepository;
         this.joueurRepository = joueurRepository;
@@ -71,13 +71,9 @@ public class TarotService {
         this.pliRepository = pliRepository;
         this.scoringService = scoringService;
         this.messagingTemplate = messagingTemplate;
-        this.tarotBotService = tarotBotService;
         this.carteRepository = carteRepository;
     }
 
-    // =========================================================
-    // ÉTAT DU JEU
-    // =========================================================
 
     public EtatTarotDTO getEtatJeuTarot(Long partieId, Long utilisateurId) {
         Partie partie = partieRepository.findById(partieId)
@@ -240,11 +236,8 @@ public class TarotService {
         return dto;
     }
 
-    // =========================================================
-    // ENCHÈRES TAROT
-    // =========================================================
 
-    public EtatTarotDTO enchirirTarot(Long partieId, Long utilisateurId, String typeBid) {
+    public EtatTarotDTO encherirTarot(Long partieId, Long utilisateurId, String typeBid) {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
 
@@ -289,11 +282,7 @@ public class TarotService {
                 List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);
                 pushEtatTarotATous(partieId, joueursActualises, EvenementJeuDTO.Type.ENCHERE);
                 // Déclencher le bot pour la nouvelle donne (AVANT le return !)
-                final Long partieIdFinal2 = partieId;
-                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                    @Override public void afterCommit() { tarotBotService.jouerSiTourDuBot(partieIdFinal2); }
-                });
-                return getEtatJeuTarot(partieId, utilisateurId);
+        return getEtatJeuTarot(partieId, utilisateurId);
             }
 
             // Passer au joueur suivant
@@ -353,11 +342,6 @@ public class TarotService {
         pushEtatTarotATous(partieId, joueursActualises, EvenementJeuDTO.Type.ENCHERE);
 
         // Déclencher bot
-        final Long partieIdFinal = partieId;
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override public void afterCommit() { tarotBotService.jouerSiTourDuBot(partieIdFinal); }
-        });
-
         return getEtatJeuTarot(partieId, utilisateurId);
     }
 
@@ -410,9 +394,6 @@ public class TarotService {
         }
     }
 
-    // =========================================================
-    // PHASE APPEL ROI (5 joueurs uniquement)
-    // =========================================================
 
     /**
      * Le preneur appelle un Roi d'une couleur qu'il ne détient pas (règle 5j).
@@ -448,9 +429,7 @@ public class TarotService {
 
         partie.setAppelRoi(couleur);
 
-        // Vérifier si le preneur détient lui-même le Roi appelé
-        // Dans ce cas, il joue seul (partenaireId reste null)
-        // Note : si le preneur détient lui-même le Roi appelé, il joue seul (partenaireId reste null).
+        // Si le preneur détient lui-même le Roi appelé, il joue seul (partenaireId reste null).
 
         // Passer à la phase suivante selon l'enchère
         String enchereType = partie.getEnchereType();
@@ -470,17 +449,9 @@ public class TarotService {
         pushEtatTarotATous(partieId, joueursAct, EvenementJeuDTO.Type.ENCHERE);
 
         // Déclencher bot si nécessaire (chien/ecart)
-        final Long partieIdFinal = partieId;
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override public void afterCommit() { tarotBotService.jouerSiTourDuBot(partieIdFinal); }
-        });
-
         return getEtatJeuTarot(partieId, utilisateurId);
     }
 
-    // =========================================================
-    // PHASE CHIEN / ÉCART
-    // =========================================================
 
     /**
      * Le preneur écarte des cartes après avoir pris le chien (PETITE/GARDE).
@@ -554,18 +525,9 @@ public class TarotService {
 
         List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);
         pushEtatTarotATous(partieId, joueursActualises, EvenementJeuDTO.Type.CARTE_JOUEE);
-
-        final Long partieIdFinal = partieId;
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override public void afterCommit() { tarotBotService.jouerSiTourDuBot(partieIdFinal); }
-        });
-
         return getEtatJeuTarot(partieId, utilisateurId);
     }
 
-    // =========================================================
-    // JOUER UNE CARTE
-    // =========================================================
 
     public EtatTarotDTO jouerCarte(Long partieId, Long utilisateurId, Long carteId) {
         Partie partie = partieRepository.findById(partieId)
@@ -646,10 +608,6 @@ public class TarotService {
         }
 
         if (!"TERMINEE".equals(partie.getStatut())) {
-            final Long partieIdFinal = partieId;
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override public void afterCommit() { tarotBotService.jouerSiTourDuBot(partieIdFinal); }
-            });
         }
 
         return getEtatJeuTarot(partieId, utilisateurId);
@@ -747,9 +705,6 @@ public class TarotService {
         }
     }
 
-    // =========================================================
-    // TERMINER UN PLI
-    // =========================================================
 
     private void terminerPliTarot(Partie partie, Pli pli, List<Joueur> joueurs) {
         List<Carte> cartes = pli.getCartesJouees();
@@ -872,9 +827,6 @@ public class TarotService {
         };
     }
 
-    // =========================================================
-    // FIN DE PARTIE
-    // =========================================================
 
     private void terminerPartieTarot(Partie partie, List<Joueur> joueurs) {
         int nbJoueurs = partie.getNbJoueursRequis();
@@ -1041,9 +993,6 @@ public class TarotService {
         return partie.getId();
     }
 
-    // =========================================================
-    // WEBSOCKET
-    // =========================================================
 
     private void pushEtatTarotATous(Long partieId, List<Joueur> joueurs, EvenementJeuDTO.Type type) {
         for (Joueur j : joueurs) {
@@ -1055,9 +1004,6 @@ public class TarotService {
         }
     }
 
-    // =========================================================
-    // UTILITAIRES
-    // =========================================================
 
     private Long getJoueurId(Long utilisateurId, Long partieId) {
         List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
@@ -1178,9 +1124,6 @@ public class TarotService {
         return r;
     }
 
-    // =========================================================
-    // PETIT SEC
-    // =========================================================
 
     /**
      * Permet à un joueur de signaler qu'il a le Petit sec (Atout 1 = seul atout en main)
@@ -1218,12 +1161,6 @@ public class TarotService {
 
         List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);
         pushEtatTarotATous(partieId, joueursActualises, EvenementJeuDTO.Type.ENCHERE);
-
-        final Long partieIdFinal = partieId;
-        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-            @Override public void afterCommit() { tarotBotService.jouerSiTourDuBot(partieIdFinal); }
-        });
-
         return getEtatJeuTarot(partieId, utilisateurId);
     }
 
@@ -1240,9 +1177,6 @@ public class TarotService {
         return nbAtouts == 1;
     }
 
-    // =========================================================
-    // POIGNÉE
-    // =========================================================
 
     /**
      * Le preneur déclare une Poignée avant de jouer sa première carte.
@@ -1287,9 +1221,6 @@ public class TarotService {
         return getEtatJeuTarot(partieId, utilisateurId);
     }
 
-    // =========================================================
-    // REDÉMARRAGE D'UNE NOUVELLE DONNE
-    // =========================================================
 
     /**
      * Réinitialise la donne : vide mains/plis/enchères, redistribue 78 cartes.

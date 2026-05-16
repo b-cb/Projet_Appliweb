@@ -13,114 +13,68 @@ import java.util.Map;
  */
 public class EtatTarotDTO {
 
-    // =========================================================
-    // ÉTAT GÉNÉRAL DE LA PARTIE
-    // =========================================================
-
     private Long   partieId;
-    private String statut;       // "EN_ENCHERE" | "EN_JEU" | "TERMINEE"
-    private String phaseJeu;     // null (enchères) | "CHIEN" | "CHIEN_VU" | "APPEL_ROI" | "JEU"
+    private String statut;       // EN_ENCHERE, EN_JEU, TERMINEE
+    private String phaseJeu;     // null (enchères) | CHIEN | CHIEN_VU | APPEL_ROI | JEU
     private int    numPliCourant;
 
-    // Enchère gagnante
-    private String enchereType;  // "PETITE" | "GARDE" | "GARDE_SANS" | "GARDE_CONTRE"
+    // enchère gagnante
+    private String enchereType;  // PETITE | GARDE | GARDE_SANS | GARDE_CONTRE
     private int    multiplicateur;
 
-    // Scores de la donne courante (en ×2 pour afficher les demi-points)
-    private int scoreA;          // points preneur (×2)
-    private int scoreB;          // points défenseurs (×2)
+    // scores de la donne en cours (×2 pour les demi-points)
+    private int scoreA;
+    private int scoreB;
 
-    // =========================================================
-    // JOUEUR COURANT (tour de jeu)
-    // =========================================================
-
+    // joueur dont c'est le tour
     private Long   tourJoueurId;
     private String tourPseudo;
 
-    // =========================================================
-    // DONNÉES DU JOUEUR CONNECTÉ
-    // =========================================================
-
+    // données du joueur connecté
     private List<CarteDTO> maMain;
     private Long           monJoueurId;
     private int            monEquipe;      // 0=inconnu, 1=preneur/partenaire, 2=défenseur
     private boolean        estPreneur;
-    private boolean        estPartenaire;  // true pour le partenaire en 5 joueurs (après révélation)
+    private boolean        estPartenaire;  // vrai pour le partenaire en 5 joueurs après révélation
 
-    // =========================================================
-    // 5 JOUEURS — APPEL DU ROI
-    // =========================================================
+    // 5 joueurs — appel du Roi
+    private String appelRoi;         // couleur appelée, visible après l'appel
+    private String pseudoPartenaire; // null tant que le partenaire n'est pas révélé
 
-    private String appelRoi;        // couleur du Roi appelé (visible par tous après l'appel)
-    private String pseudoPartenaire;// null tant que le partenaire n'est pas révélé
-
-    // =========================================================
-    // CHIEN
-    // =========================================================
-
-    private List<CarteDTO> chien;   // visible par tous en phase CHIEN et CHIEN_VU
-
-    // =========================================================
-    // PLIS
-    // =========================================================
+    private List<CarteDTO> chien;    // visible en phase CHIEN et CHIEN_VU
 
     private List<CartePliDTO> pliCourant;
     private List<CartePliDTO> dernierPli;
     private int               dernierPliGagnantEquipe;
 
-    // =========================================================
-    // HISTORIQUE DES ENCHÈRES
-    // =========================================================
-
     private List<EnchereDTO> encheres;
 
-    // =========================================================
-    // PROGRESSION DU SCORE (pendant le jeu)
-    // =========================================================
+    // progression du score pendant le jeu
+    private int boutsPreneur;
+    private int pointsPreneurX2;    // diviser par 2 pour les points réels
+    private int seuilCourant;
 
-    private int boutsPreneur;       // bouts déjà capturés par le preneur
-    private int pointsPreneurX2;    // points ×2 actuels du preneur
-    private int seuilCourant;       // seuil calculé d'après les bouts actuels
-
-    // =========================================================
-    // MULTI-MANCHE
-    // =========================================================
-
+    // multi-manche
     private int donneActuelle;
     private int maxDonnes;
     private int maxPoints;
     private int scoreGlobalA;
     private int scoreGlobalB;
 
-    // =========================================================
-    // DÉCLARATIONS SPÉCIALES
-    // =========================================================
+    private String poigneeDeclaree; // null | SIMPLE | DOUBLE | TRIPLE
 
-    private String poigneeDeclaree;  // null | "SIMPLE" | "DOUBLE" | "TRIPLE"
-
-    /** true si un joueur a le Petit comme seul atout (peut annuler la donne) */
+    // true si un joueur a le Petit comme seul atout (peut annuler la donne)
     private boolean petitSecDetecte;
-
-    /** true uniquement pour le joueur concerné par le Petit sec */
+    // true uniquement pour le joueur concerné
     private boolean monPetitEstSec;
 
-    // =========================================================
-    // SCORES INDIVIDUELS (joueurId → scorePartie cumulé)
-    // =========================================================
-
+    // scores individuels cumulés : joueurId → scorePartie
     private Map<Long, Integer> scoresJoueurs;
 
-    // =========================================================
-    // RÉSULTAT FINAL (si statut = TERMINEE)
-    // =========================================================
-
+    // résultat disponible quand statut = TERMINEE
     private ResultatTarotDTO resultat;
 
     public EtatTarotDTO() {}
-
-    // =========================================================
-    // GETTERS / SETTERS
-    // =========================================================
 
     public Long getPartieId() { return partieId; }
     public void setPartieId(Long partieId) { this.partieId = partieId; }
@@ -227,13 +181,6 @@ public class EtatTarotDTO {
     public ResultatTarotDTO getResultat() { return resultat; }
     public void setResultat(ResultatTarotDTO resultat) { this.resultat = resultat; }
 
-    // =========================================================
-    // INNER DTOs
-    // =========================================================
-
-    /**
-     * Représente une carte jouée dans un pli, avec le pseudo et l'équipe du joueur.
-     */
     public static class CartePliDTO {
         private CarteDTO carte;
         private String   pseudo;

@@ -6,11 +6,7 @@ import fr.enseeiht.jeux.dto.EnchereDTO;
 import java.util.List;
 import java.util.Map;
 
-/**
- * Vue de l'état du jeu Tarot pour un joueur donné.
- *
- * Retourné par : GET /api/partie/{id}/tarot/etat?utilisateurId=...
- */
+// Vue de l'état du jeu Tarot pour un joueur donné.
 public class EtatTarotDTO {
 
     private Long   partieId;
@@ -200,9 +196,7 @@ public class EtatTarotDTO {
         public void setEquipe(int equipe)      { this.equipe = equipe; }
     }
 
-    /**
-     * Résultat complet de la donne (disponible quand statut = TERMINEE).
-     */
+    // Résultat complet de la donne.
     public static class ResultatTarotDTO {
         private String  enchereType;
         private int     multiplicateur;

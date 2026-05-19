@@ -28,9 +28,7 @@ import fr.enseeiht.jeux.repository.PartieRepository;
 import fr.enseeiht.jeux.repository.PliRepository;
 import fr.enseeiht.jeux.repository.UtilisateurRepository;
 
-// Logique de jeu pour le Tarot (3, 4 ou 5 joueurs).
-// La progression passe par statut (EN_ENCHERE → EN_JEU → TERMINEE) et phaseJeu
-// (null → CHIEN / CHIEN_VU / APPEL_ROI → JEU).
+// Logique de jeu pour le Tarot.
 @Service
 @Transactional
 public class TarotService {
@@ -345,9 +343,7 @@ public class TarotService {
         return getEtatJeuTarot(partieId, utilisateurId);
     }
 
-    /**
-     * Retourne true si, après la dernière enchère réelle, N-1 joueurs ont passé.
-     */
+    // Vérifie si N-1 joueurs ont passé après la dernière enchère.
     private boolean doitTerminerEncheres(List<Enchere> encheres, int nbJoueurs) {
         if (encheres.isEmpty()) return false;
         int passesDepuisDerniere = 0;
@@ -358,9 +354,7 @@ public class TarotService {
         return passesDepuisDerniere >= nbJoueurs - 1;
     }
 
-    /**
-     * Initialise le jeu après qu'une enchère ait été gagnée.
-     */
+    // Initialise le jeu.
     private void lancerJeuTarot(Partie partie, List<Joueur> joueurs, String enchereType) {
         int mult = scoringService.multiplicateurPourType(enchereType);
         partie.setMultiplicateur(mult);
@@ -395,10 +389,7 @@ public class TarotService {
     }
 
 
-    /**
-     * Le preneur appelle un Roi d'une couleur qu'il ne détient pas.
-     * @param couleur
-     */
+    // Le preneur appelle un Roi.
     public EtatTarotDTO appelerRoi(Long partieId, Long utilisateurId, String couleur) {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
@@ -451,10 +442,7 @@ public class TarotService {
     }
 
 
-    /**
-     * Le preneur écarte des cartes après avoir pris le chien (PETITE/GARDE).
-     * Pour GARDE_SANS, appeler avec une liste vide.
-     */
+    // Le preneur écarte des cartes.
     public EtatTarotDTO ecarterCartes(Long partieId, Long utilisateurId, List<Long> carteIds) {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
@@ -611,13 +599,7 @@ public class TarotService {
         return getEtatJeuTarot(partieId, utilisateurId);
     }
 
-    /**
-     * Vérifie les règles de suivi au Tarot :
-     * 1. Obligation de suivre la couleur demandée
-     * 2. Si n'a pas la couleur : obligation de couper avec un atout
-     * 3. Si joue atout : obligation de monter
-     * 4. L'Excuse peut être jouée à tout moment (valeur "Excuse", couleur "Atout")
-     */
+    // Vérifie les règles de suivi au Tarot.
     private void verifierReglesTarot(Joueur joueur, Carte carteJouee, Pli pli) {
         // L'Excuse est toujours jouable
         if ("Excuse".equals(carteJouee.getValeur()) && "Atout".equals(carteJouee.getCouleur())) return;
@@ -757,9 +739,7 @@ public class TarotService {
         }
     }
 
-    /**
-     * Détermine l'index de position du gagnant du pli.
-     */
+    // Détermine le gagnant du pli.
     private int determinerGagnantPli(List<Carte> cartes, int ouvreurIndex, int nbJoueurs) {
         // Retirer l'Excuse du calcul du gagnant (elle ne gagne jamais)
         Carte premierCarteEffective = null;
@@ -918,16 +898,7 @@ public class TarotService {
         }
     }
 
-    /**
-     * Collecte les cartes comptant pour le preneur selon le type d'enchère.
-     * - PETITE/GARDE : plis gagnés par l'équipe 1 + écartes
-     * - GARDE_SANS   : plis gagnés par l'équipe 1 (chien aux défenseurs)
-     * - GARDE_CONTRE : plis gagnés par l'équipe 1 (chien aux défenseurs)
-     *
-     * Règle de l'Excuse : elle reste toujours dans les points de l'équipe qui l'a jouée,
-     * quelle que soit l'équipe gagnante du pli.
-     * Exception : si l'équipe 1 (attaque) joue l'Excuse au DERNIER pli, elle va à la défense.
-     */
+    // Collecte les cartes du preneur.
     private List<Carte> collecterCartesPreneur(Partie partie, List<Joueur> joueurs) {
         List<Carte> cartes = new ArrayList<>();
         int nbJoueurs = partie.getNbJoueursRequis();
@@ -1007,7 +978,7 @@ public class TarotService {
                 .orElseThrow(() -> new BusinessException("Vous n'êtes pas dans cette partie."));
     }
 
-    /** Ordre de tri d'une carte pour afficher la main de façon lisible. */
+    // Ordre de tri d'une carte.
     private int ordreCarte(Carte c) {
         if ("Atout".equals(c.getCouleur())) {
             if ("Excuse".equals(c.getValeur())) return -1;
@@ -1016,21 +987,7 @@ public class TarotService {
         return ORDRE_SUIT.indexOf(c.getValeur());
     }
 
-    /**
-     * Correction de ±0,5 pt (±1 en ×2) liée à la règle de compensation de l'Excuse.
-     *
-     * Quand l'Excuse est jouée par une équipe qui ne gagne pas le pli, elle revient à
-     * l'équipe qui l'a jouée. Mais l'équipe gagnante se retrouve avec une carte en moins
-     * dans le pli (déficit de 0,5 pt). Par compensation, l'équipe qui a joué l'Excuse
-     * lui cède une petite carte (0,5 pt) tirée de ses plis.
-     *
-     * On modélise cela comme un ajustement de ±1 (×2) sur le score du preneur :
-     *   +1  → défenseur a joué l'Excuse, preneur a gagné le pli → preneur reçoit +0,5
-     *   −1  → preneur a joué l'Excuse, défenseur a gagné le pli → preneur cède −0,5
-     *
-     * Exception : dernier pli + preneur joue l'Excuse → l'Excuse va déjà à la défense,
-     * pas de compensation supplémentaire.
-     */
+    // Correction de points liée à l'Excuse.
     private int correctionExcuseX2(Partie partie, List<Joueur> joueurs) {
         int nbJoueurs = partie.getNbJoueursRequis();
         int maxPlis   = nombreMaxPlis(nbJoueurs);
@@ -1118,14 +1075,7 @@ public class TarotService {
     }
 
 
-    /**
-     * Permet à un joueur de signaler qu'il a le Petit sec (Atout 1 = seul atout en main)
-     * avant le début des enchères. Dans ce cas, la donne est annulée et redistribuée.
-     * Cette action n'est disponible que si :
-     *  - La partie est en statut EN_ENCHERE sans phase (début de donne)
-     *  - petitSecDetecte est vrai
-     *  - Le joueur qui signale a bien le Petit comme seul atout
-     */
+    // Signaler un Petit sec.
     public EtatTarotDTO signalerPetitSec(Long partieId, Long utilisateurId) {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));
@@ -1157,9 +1107,7 @@ public class TarotService {
         return getEtatJeuTarot(partieId, utilisateurId);
     }
 
-    /**
-     * Retourne true si le joueur a le Petit (Atout 1) comme seul atout non-Excuse en main.
-     */
+    // Retourne true si le joueur a le Petit sec.
     private boolean hasPetitSec(Joueur joueur) {
         List<Carte> main = joueur.getCartesEnMain();
         boolean aPetit = main.stream().anyMatch(c -> "Atout".equals(c.getCouleur()) && "1".equals(c.getValeur()));
@@ -1171,10 +1119,7 @@ public class TarotService {
     }
 
 
-    /**
-     * Le preneur déclare une Poignée avant de jouer sa première carte.
-     * "SIMPLE"|"DOUBLE"|"TRIPLE"
-     */
+    // Le preneur déclare une Poignée.
     public EtatTarotDTO declarePoignee(Long partieId, Long utilisateurId, String typePoignee) {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new fr.enseeiht.jeux.exception.ResourceNotFoundException("Partie introuvable."));
@@ -1215,10 +1160,7 @@ public class TarotService {
     }
 
 
-    /**
-     * Réinitialise la donne : vide mains/plis/enchères, redistribue 78 cartes.
-     * Conserve les scores globaux et le numéro de donne.
-     */
+    // Réinitialise la donne.
     void redemarrerDonneTarot(Partie partie, List<Joueur> joueurs) {
         Long partieId = partie.getId();
         int nbJoueurs = partie.getNbJoueursRequis();

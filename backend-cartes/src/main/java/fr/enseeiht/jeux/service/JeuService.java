@@ -361,10 +361,7 @@ public class JeuService {
         partie.setTourJoueurIndex((partie.getDonneActuelle() - 1) % 4);
     }
 
-    /**
-     * Retourne true si, depuis la dernière enchère réelle, il y a eu 3 passes
-     * consécutives.
-     */
+    // Vérifie s'il y a eu 3 passes consécutives.
     private boolean doitCommencerJeu(List<Enchere> encheres) {
         if (encheres.size() < 4)
             return false;
@@ -448,11 +445,7 @@ public class JeuService {
         return getEtatJeu(partieId, utilisateurId);
     }
 
-    /**
-     * Vérifie les règles de suivi (couleur demandée, obligation de couper, de
-     * monter).
-     * Gère les trois modes : coinche normale, Sans-atout, Tout-atout.
-     */
+    // Vérifie les règles de suivi.
     private void verifierReglesCouleur(Joueur joueur, Carte carteJouee, Pli pli, String atout, List<Joueur> joueurs) {
         if (pli.getCartesJouees().isEmpty())
             return; // premier à jouer dans ce pli, tout est permis
@@ -537,11 +530,7 @@ public class JeuService {
         }
     }
 
-    /**
-     * Retourne true si c'est le partenaire du joueur courant qui est actuellement
-     * maître du pli.
-     * Utilisé pour lever l'obligation de couper/monter.
-     */
+    // Vérifie si le partenaire est maître du pli.
     private boolean estPartenaireLeGagnantActuel(List<Carte> cartesJouees, int ouvreurIndex,
             int equipeJoueur, List<Joueur> joueurs, String atout) {
         if (cartesJouees.isEmpty())
@@ -583,10 +572,7 @@ public class JeuService {
         return gagnantActuel.getEquipe() == equipeJoueur;
     }
 
-    /**
-     * Évalue le pli, attribue les points, met à jour les scores, gère la fin de
-     * partie.
-     */
+    // Termine le pli.
     private void terminerPli(Partie partie, Pli pli, List<Joueur> joueurs) {
         String atout = partie.getAtout();
         List<Carte> cartes = pli.getCartesJouees();
@@ -687,12 +673,7 @@ public class JeuService {
         }
     }
 
-    /**
-     * Calcule le résultat de la donne, accumule les scores globaux.
-     * Si la condition de fin de partie n'est pas atteinte, redémarre une nouvelle
-     * donne.
-     * Sinon marque TERMINEE et incrémente les scoreGlobal des gagnants.
-     */
+    // Termine la partie.
     private void terminerPartie(Partie partie, List<Joueur> joueurs) {
         int contrat = partie.getContratValeur();
         Long preneurId = partie.getPreneurId();
@@ -810,18 +791,7 @@ public class JeuService {
     }
 
 
-    /**
-     * Coinche : un adversaire du preneur double le contrat (x2).
-     * - Condition : il y a un contrat en cours ET l'état est NORMAL (coinche == 0)
-     * - Après coinche : la parole revient à l'équipe preneure (premier joueur du
-     * preneur)
-     * Les enchères classiques sont désormais interdites.
-     *
-     * Surcoinche : l'équipe du preneur quadruple le contrat (x4).
-     * - Condition : le contrat est déjà coinché (coinche == 1) ET c'est l'équipe du
-     * preneur qui joue
-     * - Après surcoinche : fin immédiate des enchères → passage en EN_JEU
-     */
+    // Coinche ou surcoinche le contrat.
     public EtatJeuDTO coincher(Long partieId, Long utilisateurId, boolean surcoinche) {
         Partie partie = partieRepository.findById(partieId)
                 .orElseThrow(() -> new ResourceNotFoundException("Partie #" + partieId + " introuvable."));

@@ -1,32 +1,48 @@
 package fr.enseeiht.jeux.service;
 
-import fr.enseeiht.jeux.dto.*;
-import fr.enseeiht.jeux.exception.BusinessException;
-import fr.enseeiht.jeux.exception.ResourceNotFoundException;
-import fr.enseeiht.jeux.modele.*;
-import fr.enseeiht.jeux.repository.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.stream.Collectors;
+
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
-import java.util.stream.Collectors;
+import fr.enseeiht.jeux.dto.CarteDTO;
+import fr.enseeiht.jeux.dto.EnchereDTO;
+import fr.enseeiht.jeux.dto.EtatJeuDTO;
+import fr.enseeiht.jeux.dto.EvenementJeuDTO;
+import fr.enseeiht.jeux.dto.ResultatDTO;
+import fr.enseeiht.jeux.exception.BusinessException;
+import fr.enseeiht.jeux.exception.ResourceNotFoundException;
+import fr.enseeiht.jeux.modele.Carte;
+import fr.enseeiht.jeux.modele.Enchere;
+import fr.enseeiht.jeux.modele.Joueur;
+import fr.enseeiht.jeux.modele.Partie;
+import fr.enseeiht.jeux.modele.Pli;
+import fr.enseeiht.jeux.modele.Utilisateur;
+import fr.enseeiht.jeux.repository.CarteRepository;
+import fr.enseeiht.jeux.repository.EnchereRepository;
+import fr.enseeiht.jeux.repository.JoueurRepository;
+import fr.enseeiht.jeux.repository.PartieRepository;
+import fr.enseeiht.jeux.repository.PliRepository;
+import fr.enseeiht.jeux.repository.UtilisateurRepository;
 
 @Service
 @Transactional
 public class JeuService {
 
-    // Valeurs des cartes à l'atout (Belote coinchée normale)
     private static final Map<String, Integer> POINTS_ATOUT = new LinkedHashMap<>();
-    // Valeurs des cartes hors atout (Belote coinchée normale)
     private static final Map<String, Integer> POINTS_NORMAL = new LinkedHashMap<>();
-    // Valeurs en mode Sans-atout (As=19, total = 4×38 + 10 dernier pli = 162)
     private static final Map<String, Integer> POINTS_SANS_ATOUT = new LinkedHashMap<>();
-    // Valeurs en mode Tout-atout (total = 4×38 + 10 dernier pli = 162)
     private static final Map<String, Integer> POINTS_TOUT_ATOUT = new LinkedHashMap<>();
-    // Ordre des cartes à l'atout (force croissante)
     private static final List<String> ORDRE_ATOUT = List.of("7", "8", "Dame", "Roi", "10", "As", "9", "Valet");
-    // Ordre des cartes hors atout (force croissante)
     private static final List<String> ORDRE_NORMAL = List.of("7", "8", "9", "Valet", "Dame", "Roi", "10", "As");
 
     static {
@@ -93,11 +109,7 @@ public class JeuService {
         this.carteRepository = carteRepository;
     }
 
-    /**
-     * Pousse l'état courant du jeu à tous les joueurs de la partie via WebSocket.
-     * On envoie un EvenementJeuDTO avec l'état vu par chaque joueur (sa propre
-     * main).
-     */
+
     private void pushEtatATous(Long partieId, List<Joueur> joueurs, EvenementJeuDTO.Type type) {
         for (Joueur j : joueurs) {
             EtatJeuDTO etat = getEtatJeu(partieId, j.getUtilisateur().getId());
@@ -132,12 +144,10 @@ public class JeuService {
         dto.setMonJoueurId(monJoueur.getId());
         dto.setMonEquipe(monJoueur.getEquipe());
 
-        // Ma main
         dto.setMaMain(monJoueur.getCartesEnMain().stream()
                 .map(CarteDTO::fromEntity)
                 .collect(Collectors.toList()));
 
-        // Joueur dont c'est le tour
         if (joueurs.size() == 4) {
             Joueur joueurTour = joueurs.stream()
                     .filter(j -> j.getPosition() == partie.getTourJoueurIndex())
@@ -148,7 +158,6 @@ public class JeuService {
             }
         }
 
-        // Pli courant
         Optional<Pli> pliOpt = pliRepository.findByPartie_IdAndNumTour(partieId, partie.getNumPliCourant());
         if (pliOpt.isPresent()) {
             Pli pli = pliOpt.get();
@@ -172,7 +181,6 @@ public class JeuService {
             dto.setPliCourant(new ArrayList<>());
         }
 
-        // Dernier pli terminé (pli précédent)
         if (partie.getNumPliCourant() > 1 || "TERMINEE".equals(partie.getStatut())) {
             int numDernier = "TERMINEE".equals(partie.getStatut())
                     ? partie.getNumPliCourant()
@@ -199,19 +207,16 @@ public class JeuService {
             }
         }
 
-        // Historique des enchères
         dto.setEncheres(enchereRepository.findByPartie_IdOrderByIdAsc(partieId).stream()
                 .map(EnchereDTO::fromEntity)
                 .collect(Collectors.toList()));
 
-        // Multi-manche
         dto.setDonneActuelle(partie.getDonneActuelle());
         dto.setMaxDonnes(partie.getMaxDonnes());
         dto.setMaxPoints(partie.getMaxPoints());
         dto.setScoreGlobalA(partie.getScoreGlobalA());
         dto.setScoreGlobalB(partie.getScoreGlobalB());
 
-        // Coinche/Surcoinche
         dto.setCoinche(partie.getCoinche());
         if (partie.getPreneurId() != null) {
             dto.setPreneurId(partie.getPreneurId());
@@ -221,7 +226,6 @@ public class JeuService {
                     .ifPresent(p -> dto.setPreneurEquipe(p.getEquipe()));
         }
 
-        // Résultat si terminée
         if ("TERMINEE".equals(partie.getStatut())) {
             dto.setResultat(buildResultat(partie, joueurs));
         }
@@ -253,9 +257,7 @@ public class JeuService {
             if (!passe) {
                 throw new BusinessException("La donne est coinchée : vous ne pouvez que passer ou surcoincher.");
             }
-            // Seule l'équipe du preneur peut parler après une coinche → vérifier que c'est
-            // bien le cas
-            Joueur preneur = joueurs.stream()
+                Joueur preneur = joueurs.stream()
                     .filter(j -> j.getId().equals(partie.getPreneurId()))
                     .findFirst()
                     .orElseThrow(() -> new BusinessException("Preneur introuvable."));
@@ -263,8 +265,7 @@ public class JeuService {
                 throw new BusinessException("Après une coinche, seule l'équipe du preneur peut passer ou surcoincher.");
             }
 
-            // Enregistrer le passe
-            Enchere e = new Enchere();
+                Enchere e = new Enchere();
             e.setPartie(partie);
             e.setPreneur(joueurActif);
             e.setPasse(true);
@@ -272,11 +273,9 @@ public class JeuService {
             enchereRepository.save(e);
             partie.setPassesConsecutives(partie.getPassesConsecutives() + 1);
 
-            // Après 2 passes de l'équipe preneure → fin des enchères, EN_JEU avec ×2
-            if (partie.getPassesConsecutives() >= 2) {
+                if (partie.getPassesConsecutives() >= 2) {
                 demarrerJeuDepuisEnchere(partie);
             } else {
-                // Passer à l'autre joueur de l'équipe du preneur
                 partie.setTourJoueurIndex((partie.getTourJoueurIndex() + 2) % 4);
             }
 
@@ -289,8 +288,7 @@ public class JeuService {
         }
 
         if (passe) {
-            // Enregistrer le passe
-            Enchere e = new Enchere();
+                Enchere e = new Enchere();
             e.setPartie(partie);
             e.setPreneur(joueurActif);
             e.setPasse(true);
@@ -307,8 +305,7 @@ public class JeuService {
                 return getEtatJeu(partieId, utilisateurId);
             }
         } else {
-            // Valider l'enchère
-            if (contrat == null || contrat < 80 || contrat > 160 || contrat % 10 != 0) {
+                if (contrat == null || contrat < 80 || contrat > 160 || contrat % 10 != 0) {
                 throw new BusinessException("Contrat invalide. Valeur entre 80 et 160, multiple de 10.");
             }
             if (couleur == null || couleur.isBlank()) {
@@ -320,8 +317,7 @@ public class JeuService {
                         "Couleur invalide. Valeurs acceptées : Coeur, Carreau, Trefle, Pique, Sans-atout, Tout-atout.");
             }
 
-            // Vérifier que le contrat surenchérit sur le précédent
-            if (partie.getContratValeur() > 0 && contrat <= partie.getContratValeur()) {
+                if (partie.getContratValeur() > 0 && contrat <= partie.getContratValeur()) {
                 throw new BusinessException(
                         "Le contrat doit être supérieur au contrat précédent (" + partie.getContratValeur() + ").");
             }
@@ -340,11 +336,8 @@ public class JeuService {
             partie.setPassesConsecutives(0);
         }
 
-        // Passer au joueur suivant
         partie.setTourJoueurIndex((partie.getTourJoueurIndex() + 1) % 4);
 
-        // Vérifier si on doit passer en EN_JEU :
-        // Condition : il y a un contrat ET les 3 joueurs suivants ont tous passé
         List<Enchere> toutesEncheres = enchereRepository.findByPartie_IdOrderByIdAsc(partieId);
         if (partie.getContratValeur() > 0 && doitCommencerJeu(toutesEncheres)) {
             demarrerJeuDepuisEnchere(partie);
@@ -352,29 +345,19 @@ public class JeuService {
 
         partieRepository.save(partie);
 
-        // Push WebSocket : notifier tous les joueurs du nouvel état
         EvenementJeuDTO.Type typeEvt = "EN_JEU".equals(partie.getStatut())
                 ? EvenementJeuDTO.Type.CARTE_JOUEE
                 : EvenementJeuDTO.Type.ENCHERE;
         pushEtatATous(partieId, joueurs, typeEvt);
 
-        // Déclencher le bot après le commit (évite la lecture de données pas encore
-        // commitées)
         return getEtatJeu(partieId, utilisateurId);
     }
 
-    /**
-     * Démarre la phase EN_JEU à partir de la phase d'enchères.
-     * Applique le multiplicateur coinche/surcoinche et configure l'atout.
-     */
+
     private void demarrerJeuDepuisEnchere(Partie partie) {
         partie.setStatut("EN_JEU");
         partie.setAtout(partie.getContratCouleur());
         partie.setNumPliCourant(1);
-        // Applique le multiplicateur via enchereType pour cohérence avec terminerPartie
-        // (coinche==1 → ×2, coinche==2 → ×4 ; géré déjà dans terminerPartie via
-        // partie.getCoinche())
-        // Le premier joueur de la donne (rotation) ouvre le premier pli
         partie.setTourJoueurIndex((partie.getDonneActuelle() - 1) % 4);
     }
 
@@ -416,13 +399,11 @@ public class JeuService {
             throw new BusinessException("Ce n'est pas votre tour de jouer.");
         }
 
-        // Vérifier que la carte est dans la main du joueur
         Carte carteJouee = joueurActif.getCartesEnMain().stream()
                 .filter(c -> c.getId().equals(carteId))
                 .findFirst()
                 .orElseThrow(() -> new BusinessException("Cette carte n'est pas dans votre main."));
 
-        // Récupérer ou créer le pli courant
         Pli pli = pliRepository.findByPartie_IdAndNumTour(partieId, partie.getNumPliCourant())
                 .orElseGet(() -> {
                     Pli nouveau = new Pli();
@@ -432,23 +413,18 @@ public class JeuService {
                     return pliRepository.save(nouveau);
                 });
 
-        // Vérifier les règles de suivi de couleur
         verifierReglesCouleur(joueurActif, carteJouee, pli, partie.getAtout(), joueurs);
 
-        // Jouer la carte
         pli.getCartesJouees().add(carteJouee);
         joueurActif.getCartesEnMain().remove(carteJouee);
         pliRepository.save(pli);
         joueurRepository.save(joueurActif);
 
-        // Passer au joueur suivant
         partie.setTourJoueurIndex((partie.getTourJoueurIndex() + 1) % 4);
 
-        // Si le pli est complet (4 cartes)
         boolean pliComplet = pli.getCartesJouees().size() == 4;
 
         if (pliComplet) {
-            // Push intermédiaire AVANT de terminer le pli : les 4 cartes sont visibles
             partieRepository.save(partie);
             pushEtatATous(partieId, joueurs, EvenementJeuDTO.Type.CARTE_JOUEE);
 
@@ -457,7 +433,6 @@ public class JeuService {
 
         partieRepository.save(partie);
 
-        // Push final (nouveau pli ou fin de partie)
         if (pliComplet) {
             EvenementJeuDTO.Type typeEvt = "TERMINEE".equals(partie.getStatut())
                     ? EvenementJeuDTO.Type.PARTIE_TERMINEE
@@ -467,8 +442,6 @@ public class JeuService {
             pushEtatATous(partieId, joueurs, EvenementJeuDTO.Type.CARTE_JOUEE);
         }
 
-        // Déclencher le bot après le commit (évite la lecture de données pas encore
-        // commitées)
         if (!"TERMINEE".equals(partie.getStatut())) {
         }
 
@@ -598,7 +571,6 @@ public class JeuService {
             }
         }
 
-        // Trouver l'équipe du gagnant actuel
         final int gagnantIndex = indexGagnant;
         Joueur gagnantActuel = joueurs.stream()
                 .filter(j -> j.getPosition() == gagnantIndex)
@@ -672,7 +644,6 @@ public class JeuService {
             }
         }
 
-        // Trouver l'équipe gagnante
         int indexGagnantFinal = indexGagnant;
         Joueur joueurGagnant = joueurs.stream()
                 .filter(j -> j.getPosition() == indexGagnantFinal)
@@ -680,7 +651,6 @@ public class JeuService {
                 .orElse(joueurs.get(0));
         int equipeGagnante = joueurGagnant.getEquipe();
 
-        // Calculer les points du pli selon le mode
         int points = 0;
         for (Carte c : cartes) {
             if ("Sans-atout".equals(atout)) {
@@ -703,7 +673,6 @@ public class JeuService {
         pli.setPointsPli(points);
         pliRepository.save(pli);
 
-        // Ajouter les points à l'équipe gagnante
         if (equipeGagnante == 1) {
             partie.setScoreA(partie.getScoreA() + points);
         } else {
@@ -711,10 +680,8 @@ public class JeuService {
         }
 
         if (dernierPli) {
-            // Fin de partie : calculer le résultat
             terminerPartie(partie, joueurs);
         } else {
-            // Passer au pli suivant, le gagnant du pli ouvre le suivant
             partie.setNumPliCourant(partie.getNumPliCourant() + 1);
             partie.setTourJoueurIndex(indexGagnant);
         }
@@ -730,7 +697,6 @@ public class JeuService {
         int contrat = partie.getContratValeur();
         Long preneurId = partie.getPreneurId();
 
-        // Trouver l'équipe du preneur
         Joueur preneur = joueurs.stream()
                 .filter(j -> j.getId().equals(preneurId))
                 .findFirst()
@@ -751,14 +717,12 @@ public class JeuService {
             }
         }
 
-        // Appliquer le multiplicateur coinche/surcoinche
         int multCoinche = (partie.getCoinche() == 2) ? 4 : (partie.getCoinche() == 1) ? 2 : 1;
         if (multCoinche > 1) {
             partie.setScoreA(partie.getScoreA() * multCoinche);
             partie.setScoreB(partie.getScoreB() * multCoinche);
         }
 
-        // Accumuler dans les scores globaux
         partie.setScoreGlobalA(partie.getScoreGlobalA() + partie.getScoreA());
         partie.setScoreGlobalB(partie.getScoreGlobalB() + partie.getScoreB());
 
@@ -794,10 +758,7 @@ public class JeuService {
         }
     }
 
-    /**
-     * Redistribue 32 nouvelles cartes pour une nouvelle donne Coinche.
-     * Les joueurs, positions, équipes et scores globaux sont conservés.
-     */
+
     private void redemarrerDonneCoinche(Partie partie, List<Joueur> joueurs) {
         Long partieId = partie.getId();
 
@@ -850,13 +811,13 @@ public class JeuService {
 
 
     /**
-     * Coinche : un adversaire du preneur double le contrat (×2).
+     * Coinche : un adversaire du preneur double le contrat (x2).
      * - Condition : il y a un contrat en cours ET l'état est NORMAL (coinche == 0)
      * - Après coinche : la parole revient à l'équipe preneure (premier joueur du
      * preneur)
      * Les enchères classiques sont désormais interdites.
      *
-     * Surcoinche : l'équipe du preneur quadruple le contrat (×4).
+     * Surcoinche : l'équipe du preneur quadruple le contrat (x4).
      * - Condition : le contrat est déjà coinché (coinche == 1) ET c'est l'équipe du
      * preneur qui joue
      * - Après surcoinche : fin immédiate des enchères → passage en EN_JEU

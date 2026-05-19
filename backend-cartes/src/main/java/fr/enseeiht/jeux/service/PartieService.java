@@ -127,7 +127,6 @@ public class PartieService {
 
         Joueur saved = joueurRepository.save(joueur);
 
-        // Push WebSocket sur topic commun
         messagingTemplate.convertAndSend(
                 "/topic/partie/" + partieId,
                 EvenementJeuDTO.of(EvenementJeuDTO.Type.JOUEUR_REJOINT,
@@ -156,7 +155,6 @@ public class PartieService {
             return demarrerPartieTarot(partieId, partie, joueurs);
         }
 
-        // Créer le jeu de 32 cartes
         String[] valeurs = {"7", "8", "9", "10", "Valet", "Dame", "Roi", "As"};
         String[] couleurs = {"Coeur", "Carreau", "Trefle", "Pique"};
 
@@ -187,7 +185,6 @@ public class PartieService {
         partie.setScoreB(0);
         partieRepository.save(partie);
 
-        // Push WebSocket personnalisé par joueur
         List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);
         for (Joueur j : joueursActualises) {
             EtatJeuDTO etat = jeuService.getEtatJeu(partieId, j.getUtilisateur().getId());
@@ -209,7 +206,6 @@ public class PartieService {
             throw new BusinessException("Seules les parties ouvertes peuvent être supprimées.");
         }
 
-        // Vérifier que l'utilisateur est bien dans la partie (ou créateur = premier joueur)
         List<Joueur> joueurs = joueurRepository.findByPartie_Id(partieId);
         boolean estDansLaPartie = joueurs.stream()
                 .anyMatch(j -> j.getUtilisateur().getId().equals(utilisateurId));
@@ -217,7 +213,6 @@ public class PartieService {
             throw new BusinessException("Vous n'êtes pas dans cette partie.");
         }
 
-        // Vider les mains des joueurs (table de jointure joueur_carte) puis supprimer les joueurs
         for (Joueur j : joueurs) {
             j.getCartesEnMain().clear();
             joueurRepository.save(j);
@@ -235,9 +230,6 @@ public class PartieService {
         return joueurRepository.findByPartie_Id(partieId);
     }
 
-    /**
-     * Démarre une partie Tarot : distribue 78 cartes, met le chien de côté.
-     */
     @org.springframework.transaction.annotation.Transactional
     /**
      * Crée une partie Tarot avec bots et la démarre immédiatement.
@@ -269,10 +261,8 @@ public class PartieService {
     private Partie demarrerPartieTarot(Long partieId, Partie partie, List<Joueur> joueurs) {
         int nbJoueurs = partie.getNbJoueursRequis();
 
-        // Taille du chien selon le nombre de joueurs
         int tailleChien = (nbJoueurs == 5) ? 3 : 6;
 
-        // Construire le jeu de 78 cartes Tarot
         List<Carte> paquet = new ArrayList<>();
 
         // 4 couleurs × 14 cartes (1-10, Valet, Cavalier, Dame, Roi)
@@ -287,7 +277,6 @@ public class PartieService {
             }
         }
 
-        // 21 atouts numérotés (1-21)
         for (int i = 1; i <= 21; i++) {
             Carte c = new Carte();
             c.setCouleur("Atout");
@@ -295,16 +284,13 @@ public class PartieService {
             paquet.add(carteRepository.save(c));
         }
 
-        // L'Excuse
         Carte excuse = new Carte();
         excuse.setCouleur("Atout");
         excuse.setValeur("Excuse");
         paquet.add(carteRepository.save(excuse));
 
-        // Mélanger
         Collections.shuffle(paquet);
 
-        // Distribuer N cartes à chaque joueur
         int cartesParJoueur = (paquet.size() - tailleChien) / nbJoueurs;
         for (int i = 0; i < nbJoueurs; i++) {
             Joueur j = joueurs.get(i);
@@ -314,11 +300,9 @@ public class PartieService {
             joueurRepository.save(j);
         }
 
-        // Les dernières cartes forment le chien
         List<Carte> chien = paquet.subList(nbJoueurs * cartesParJoueur, paquet.size());
         partie.setChien(new ArrayList<>(chien));
 
-        // Initialiser l'état de la partie
         partie.setStatut("EN_ENCHERE");
         partie.setPhaseJeu(null);
         partie.setTourJoueurIndex(0);
@@ -326,7 +310,6 @@ public class PartieService {
         partie.setNumPliCourant(0);
         partieRepository.save(partie);
 
-        // Push WebSocket
         List<Joueur> joueursActualises = joueurRepository.findByPartie_Id(partieId);
         for (Joueur j : joueursActualises) {
             fr.enseeiht.jeux.tarot.EtatTarotDTO etat = tarotService.getEtatJeuTarot(partieId, j.getUtilisateur().getId());
@@ -351,17 +334,14 @@ public class PartieService {
                                        fr.enseeiht.jeux.repository.PliRepository pliRepository) {
         Long partieId = partie.getId();
 
-        // Vider les mains des joueurs
         for (Joueur j : joueurs) {
             j.getCartesEnMain().clear();
             joueurRepository.save(j);
         }
 
-        // Supprimer les plis et enchères de la donne précédente
         pliRepository.deleteAll(pliRepository.findByPartie_Id(partieId));
         enchereRepository.deleteAll(enchereRepository.findByPartie_IdOrderByIdAsc(partieId));
 
-        // Créer et distribuer un nouveau jeu de 32 cartes
         String[] valeurs = {"7", "8", "9", "10", "Valet", "Dame", "Roi", "As"};
         String[] couleurs = {"Coeur", "Carreau", "Trefle", "Pique"};
         List<Carte> paquet = new ArrayList<>();
@@ -383,7 +363,6 @@ public class PartieService {
             joueurRepository.save(j);
         }
 
-        // Réinitialiser l'état de la donne (pas les scores globaux)
         partie.setStatut("EN_ENCHERE");
         partie.setAtout(null);
         partie.setContratValeur(0);
@@ -396,7 +375,6 @@ public class PartieService {
         partie.setTourJoueurIndex(0);
         partieRepository.save(partie);
 
-        // Push WebSocket : tous les joueurs reçoivent le nouvel état
         List<Joueur> joueursActualisesPost = joueurRepository.findByPartie_Id(partieId);
         for (Joueur j : joueursActualisesPost) {
             EtatJeuDTO etat = jeuService.getEtatJeu(partieId, j.getUtilisateur().getId());

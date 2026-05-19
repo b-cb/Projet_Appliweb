@@ -9,12 +9,7 @@ import org.springframework.stereotype.Component;
 
 import fr.enseeiht.jeux.modele.Carte;
 
-/**
- * Calcule les scores du Tarot.
- *
- * Système de demi-points stockés x2 pour rester en entiers :
- * Total du jeu = 91 pts : 182
- */
+// Scoring Tarot — points stockés ×2 pour éviter les demi-points (total jeu = 91 pts → 182 ×2)
 @Component
 public class TarotScoringService {
 
@@ -42,9 +37,7 @@ public class TarotScoringService {
     }
 
 
-    /**
-     * Valeur x2 d'une carte.
-     */
+
     public int carteVautX2(Carte c) {
         if ("Atout".equals(c.getCouleur()) && BOUTS_VALEURS.contains(c.getValeur())) {
             return BOUT_X2;
@@ -58,25 +51,19 @@ public class TarotScoringService {
         };
     }
 
-    /**
-     * Somme des valeurs x2 d'une liste de cartes.
-     */
+
     public int calculerPointsX2(List<Carte> cartes) {
         int total = 0;
         for (Carte c : cartes) total += carteVautX2(c);
         return total;
     }
 
-    /**
-     * Retourne true si la carte est un bout.
-     */
+
     public boolean isBout(Carte c) {
         return "Atout".equals(c.getCouleur()) && BOUTS_VALEURS.contains(c.getValeur());
     }
 
-    /**
-     * Nombre de bouts dans une liste de cartes.
-     */
+
     public int compterBouts(List<Carte> cartes) {
         return (int) cartes.stream()
                 .filter(c -> "Atout".equals(c.getCouleur()) && BOUTS_VALEURS.contains(c.getValeur()))
@@ -84,37 +71,19 @@ public class TarotScoringService {
     }
 
 
-    /**
-     * Seuil de victoire (en points entiers) selon le nombre de bouts capturés.
-     */
+
     public int seuilPourBouts(int bouts) {
         int idx = Math.min(bouts, 3);
         return SEUILS[idx];
     }
 
-    /**
-     * Multiplicateur selon le type d'enchère.
-     */
+
     public int multiplicateurPourType(String enchereType) {
         return MULTIPLICATEURS.getOrDefault(enchereType, 1);
     }
 
 
-    /**
-     * Calcule le score final de la partie pour le preneur.
-     *
-     * Formule :
-     *   écart = points_preneur - seuil  (en demi-points)
-     *   résultat = round((25 + |écart|) x multiplicateur)
-     *   Bonus Petit au bout : +10 x multiplicateur (pour l'équipe qui réalise)
-     *
-     * @param pointsPreneurX2
-     * @param bouts
-     * @param enchereType
-     * @param petitAuBoutPreneur
-     * @param petitAuBoutDefense
-     * @return score du preneur (positif = victoire, négatif = défaite)
-     */
+    // résultat = ±round((25 + |pts_preneur - seuil|) × multiplicateur), bonus ±10×mult si Petit au bout
     public int calculerScore(int pointsPreneurX2, int bouts, String enchereType,
                              boolean petitAuBoutPreneur, boolean petitAuBoutDefense) {
         int seuil = seuilPourBouts(bouts);
@@ -137,10 +106,7 @@ public class TarotScoringService {
     }
 
 
-    /**
-     * Bonus de Poignée en points entiers.
-     * Le bonus va au camp gagnant, quel que soit le déclarant.
-     */
+
     public int poigneeBonus(String poigneeDeclaree) {
         if (poigneeDeclaree == null) return 0;
         return switch (poigneeDeclaree) {
@@ -151,9 +117,7 @@ public class TarotScoringService {
         };
     }
 
-    /**
-     * Nombre d'atouts (hors Excuse) requis pour déclarer une poignée.
-     */
+
     public int nbAtouttsPourPoignee(int nbJoueurs, String poigneeType) {
         return switch (nbJoueurs) {
             case 3  -> switch (poigneeType) { case "SIMPLE" -> 13; case "DOUBLE" -> 15; default -> 18; };

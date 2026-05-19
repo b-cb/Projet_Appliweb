@@ -396,10 +396,8 @@ public class TarotService {
 
 
     /**
-     * Le preneur appelle un Roi d'une couleur qu'il ne détient pas (règle 5j).
-     * Après l'appel, on passe à la phase suivante selon le type d'enchère.
-     *
-     * @param couleur "Coeur"|"Carreau"|"Trefle"|"Pique"
+     * Le preneur appelle un Roi d'une couleur qu'il ne détient pas.
+     * @param couleur
      */
     public EtatTarotDTO appelerRoi(Long partieId, Long utilisateurId, String couleur) {
         Partie partie = partieRepository.findById(partieId)
@@ -455,7 +453,7 @@ public class TarotService {
 
     /**
      * Le preneur écarte des cartes après avoir pris le chien (PETITE/GARDE).
-     * Pour GARDE_SANS, appeler avec une liste vide (confirme la vue).
+     * Pour GARDE_SANS, appeler avec une liste vide.
      */
     public EtatTarotDTO ecarterCartes(Long partieId, Long utilisateurId, List<Long> carteIds) {
         Partie partie = partieRepository.findById(partieId)
@@ -814,15 +812,10 @@ public class TarotService {
     }
 
     private int nombreMaxPlis(int nbJoueurs) {
-        // 3j : 24 cartes / 3 = 8 plis ; 4j : 18 cartes / 4 ≈ not integer... wait
-        // 4j : (78 - 6 chien) / 4 = 72/4 = 18 cartes par joueur → 18 plis
-        // Wait no, 4 players × 18 cards = 72, + 6 chien = 78 ✓
-        // But 18 cards per player → 18 plis of 4 cards
-        // 3j : 3 × 24 = 72, + 6 chien = 78 → 24 plis of 3 cards
         return switch (nbJoueurs) {
-            case 3 -> 24;   // 3 × 24 cartes = 72 + 6 chien = 78
-            case 4 -> 18;   // 4 × 18 cartes = 72 + 6 chien = 78
-            case 5 -> 15;   // 5 × 15 cartes = 75 + 3 chien = 78
+            case 3 -> 24;
+            case 4 -> 18;
+            case 5 -> 15;
             default -> 18;
         };
     }

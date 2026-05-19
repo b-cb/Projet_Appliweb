@@ -65,7 +65,6 @@ public class BotService {
             log.error("Bot {} dans partie {} : {}", botPseudo, partieId, e.getMessage());
         }
 
-        // enchaîner si le joueur suivant est aussi un bot
         if (aJoue) jouerSiTourDuBot(partieId);
     }
 
@@ -87,7 +86,6 @@ public class BotService {
         log.info("{} tente de jouer dans partie {} — {} cartes en main : {}",
                 botPseudo, partieId, main.size(), descriptionMain(main));
 
-        // Essayer chaque carte de la main
         for (Carte carte : main) {
             try {
                 jeuService.jouerCarte(partieId, botUserId, carte.getId());

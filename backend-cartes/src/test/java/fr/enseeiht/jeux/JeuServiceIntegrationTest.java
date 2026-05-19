@@ -17,9 +17,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 
 /**
- * Tests d'intégration de JeuService — règles Belote coinchée.
- * Utilise H2 en mémoire (application.properties de test).
- * Chaque test démarre avec une partie complète propre.
+ * Tests d'intégration de JeuService.
  */
 @SpringBootTest
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
@@ -34,9 +32,7 @@ class JeuServiceIntegrationTest {
     private Utilisateur u1, u2, u3, u4;
     private Partie partie;
 
-    /**
-     * Crée 4 utilisateurs, crée une partie et la démarre (répartit les cartes).
-     */
+    // Crée 4 utilisateurs et démarre la partie.
     @BeforeEach
     void setUp() {
         u1 = creerUtilisateur("joueur1");
@@ -153,10 +149,7 @@ class JeuServiceIntegrationTest {
 
     // ===== RÈGLES DE JEU =====
 
-    /**
-     * Démarre une partie en jeu avec atout Coeur (u1 est le preneur).
-     * Retourne les Joueurs rechargés depuis la BDD.
-     */
+    // Démarre une partie avec atout Coeur.
     private List<Joueur> demarrerJeu(String couleurAtout) {
         jeuService.encherir(partie.getId(), u1.getId(), 80, couleurAtout, false);
         jeuService.encherir(partie.getId(), u2.getId(), null, null, true);

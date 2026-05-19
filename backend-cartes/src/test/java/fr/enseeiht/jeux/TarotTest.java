@@ -19,12 +19,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.*;
 
 /**
- * Tests Tarot — deux niveaux :
- *
- * 1. Tests unitaires de TarotScoringService (logique de score pure, aucune BDD).
- * 2. Tests d'intégration de TarotService (Spring Boot + H2 mémoire).
- *
- * Convention de nommage : méthode_scénario_résultatAttendu()
+ * Tests Tarot.
  */
 @SpringBootTest
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
@@ -701,10 +696,7 @@ class TarotTest {
         private Long partieId;
         private Long preneurUserId;
 
-        /**
-         * Démarre une partie Tarot 4j, fait gagner GARDE_CONTRE au premier joueur
-         * (passe directement en EN_JEU sans phase chien).
-         */
+        // Démarre une partie Tarot 4j avec GARDE_CONTRE.
         @BeforeEach
         void setUp() {
             Utilisateur u1 = creerUtilisateur("jc1");

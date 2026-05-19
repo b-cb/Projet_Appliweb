@@ -1,7 +1,4 @@
-/**
- * Panel d'enchères pour le Tarot.
- * Affiche les boutons : Passe / Petite / Garde / Garde sans / Garde contre
- */
+// Panel d'enchères pour le Tarot.
 
 const BID_ORDER = ['PETITE', 'GARDE', 'GARDE_SANS', 'GARDE_CONTRE']
 const BID_LABELS = {

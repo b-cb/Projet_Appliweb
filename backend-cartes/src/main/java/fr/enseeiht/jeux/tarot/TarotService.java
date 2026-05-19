@@ -324,8 +324,7 @@ public class TarotService {
             // Passer au joueur suivant
             partie.setTourJoueurIndex((partie.getTourJoueurIndex() + 1) % nbJoueurs);
 
-            // Vérifier si tous les autres ont eu leur chance (N-1 joueurs ont passé après cette enchère)
-            // Ou si c'est GARDE_CONTRE (personne ne peut surenchérir par convention)
+            // Vérifier si tous les autres ont passé ou si c'est GARDE_CONTRE.
             List<Enchere> toutesEncheres = enchereRepository.findByPartie_IdOrderByIdAsc(partieId);
             if ("GARDE_CONTRE".equals(bid) || doitTerminerEncheres(toutesEncheres, nbJoueurs)) {
                 // L'enchère est gagnée — initialiser le jeu
@@ -484,8 +483,7 @@ public class TarotService {
                 aEcarter.add(c);
             }
 
-            // Règles d'écart : pas de bouts (Petit/Monde/Excuse), pas de Rois
-            // Les atouts non-bouts sont autorisés (règle officielle FFT)
+            // Règles d'écart : pas de bouts ni de Rois, atouts autorisés.
             for (Carte c : aEcarter) {
                 if (scoringService.isBout(c)) {
                     throw new BusinessException("Impossible d'écarter un bout (" + c.getValeur() + ").");
@@ -837,8 +835,7 @@ public class TarotService {
         boolean cinqJoueurs = partie.getNbJoueursRequis() == 5;
         boolean jeuSolo5j = cinqJoueurs && partie.getPartenaireId() == null;
 
-        // Accumuler dans les scores globaux de la partie
-        // scoreGlobalA = preneur (ou équipe attaque), scoreGlobalB = défenseurs
+        // Accumuler dans les scores globaux de la partie (A=attaque, B=défense).
         int deltaPreneur = rempli ? absScore : -absScore;
         partie.setScoreGlobalA(partie.getScoreGlobalA() + deltaPreneur);
         partie.setScoreGlobalB(partie.getScoreGlobalB() - deltaPreneur);
@@ -887,8 +884,7 @@ public class TarotService {
             // Comportement legacy : 1 seule donne
             partieTerminee = true;
         }
-        // Pour maxPoints en Tarot : le scoreGlobal est la somme des deltas (peut être négatif)
-        // On utilise simplement le nombre de donnes comme condition principale
+        // Le scoreGlobal est la somme des deltas, fin par nombre de donnes.
 
         if (partieTerminee) {
             partie.setStatut("TERMINEE");
@@ -934,8 +930,7 @@ public class TarotService {
                     cartes.remove(excuseDuPli);
                 }
             } else {
-                // Pli gagné par les défenseurs — rien pour le preneur…
-                // … sauf l'Excuse s'il l'a jouée, SAUF au dernier pli (exception officielle FFT)
+                // L'Excuse jouée par le preneur lui revient, sauf au dernier pli.
                 if (excuseDuPli != null && equipeExcuse == 1 && !dernierPli) {
                     cartes.add(excuseDuPli);
                 }

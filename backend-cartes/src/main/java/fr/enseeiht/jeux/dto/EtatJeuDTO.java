@@ -2,10 +2,7 @@ package fr.enseeiht.jeux.dto;
 
 import java.util.List;
 
-/**
- * Vue complète de l'état du jeu pour un joueur donné.
- * Retourné par GET /api/partie/{id}/etat?utilisateurId=...
- */
+// Vue complète de l'état du jeu pour un joueur donné.
 public class EtatJeuDTO {
 
     private Long partieId;

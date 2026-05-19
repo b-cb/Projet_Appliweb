@@ -1,15 +1,4 @@
-/**
- * Affiche une carte à jouer.
- *
- * Sources d'images :
- *   - Dos                        → svg-cards.svg#back
- *   - Atouts 0-21 (Excuse+1-21)  → /tarot/atout_NN.png  (inchangé)
- *   - Cavalier (12)              → /tarot/cavalier_{couleur}.png (généré)
- *   - Autres cartes de couleur   → svg-cards.svg#<suit>_<val>
- *     (As=1, 2-10, Valet=jack, Dame=queen, Roi=king)
- *
- * Le sprite svg-cards a un viewBox de 169.075 × 244.640.
- */
+// Affiche une carte à jouer.
 
 // Ratio du sprite svg-cards
 const SVG_W = 169.075
@@ -23,8 +12,7 @@ const SUIT_SVG = {
   Trefle:  'club',
 }
 
-// Mapping valeur → suffixe dans le sprite
-// As = "1" dans le sprite (ex: heart_1)
+// Mapping valeur → suffixe dans le sprite (As = "1").
 const VALEUR_SVG = {
   As:      '1',
   Valet:   'jack',
@@ -47,9 +35,7 @@ function atoutPath(valeur) {
   return `/tarot/atout_${n}.png`
 }
 
-/**
- * @param {{ carte?: {valeur:string, couleur:string}, largeur?: number, dos?: boolean }} props
- */
+// Props de l'image de carte.
 export default function CardImage({ carte, largeur = 70, dos = false }) {
   const hauteur = Math.round(largeur * (SVG_H / SVG_W))
 

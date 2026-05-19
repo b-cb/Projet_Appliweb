@@ -471,8 +471,7 @@ public class JeuService {
                 }
                 return; // n'a pas la couleur → peut défausser librement
             }
-            // Joue la couleur demandée → obligation de monter (ORDRE_ATOUT pour toutes les
-            // couleurs)
+            // Joue la couleur demandée → obligation de monter.
             Optional<Carte> plusFort = pli.getCartesJouees().stream()
                     .filter(c -> c.getCouleur().equals(couleurDemandee))
                     .max(Comparator.comparingInt(c -> ORDRE_ATOUT.indexOf(c.getValeur())));
@@ -500,8 +499,7 @@ public class JeuService {
             if (possedeColoreDemandee) {
                 throw new BusinessException("Vous devez suivre la couleur demandée (" + couleurDemandee + ").");
             }
-            // N'a pas la couleur demandée → obligation de couper SAUF si le partenaire est
-            // maître
+            // Obligation de couper SAUF si le partenaire est maître.
             if (!couleurDemandee.equals(atout) && possedeAtout
                     && !carteJouee.getCouleur().equals(atout)
                     && !partenaireEstMaitre) {
@@ -567,8 +565,7 @@ public class JeuService {
 
         if (gagnantActuel == null)
             return false;
-        // Le partenaire est maître si le gagnant est dans la même équipe mais n'est pas
-        // le joueur lui-même
+        // Le partenaire est maître si le gagnant est dans la même équipe.
         return gagnantActuel.getEquipe() == equipeJoueur;
     }
 
@@ -596,8 +593,7 @@ public class JeuService {
                 }
             }
         } else if ("Tout-atout".equals(atout)) {
-            // La couleur ouverte agit comme atout (ORDRE_ATOUT), pas de coupe
-            // inter-couleurs
+            // La couleur ouverte agit comme atout, pas de coupe inter-couleurs.
             for (int i = 1; i < 4; i++) {
                 Carte c = cartes.get(i);
                 int joueurIndex = (ouvreurIndex + i) % 4;
@@ -841,13 +837,10 @@ public class JeuService {
             // Application
             partie.setCoinche(1);
             partie.setEnchereType("COINCHE");
-            // Remettre le compteur de passes à 0 pour compter les 2 passes de l'équipe
-            // preneure
+            // Remettre le compteur de passes à 0 pour l'équipe preneure.
             partie.setPassesConsecutives(0);
 
-            // La parole revient au preneur lui-même (pas forcément le joueur à la position
-            // la plus basse),
-            // puis à son partenaire s'il passe également.
+            // La parole revient au preneur, puis à son partenaire s'il passe.
             partie.setTourJoueurIndex(preneur.getPosition());
         }
 

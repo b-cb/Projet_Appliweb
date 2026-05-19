@@ -1,8 +1,4 @@
-/**
- * Sélecteur du Roi appelé — phase APPEL_ROI du Tarot 5 joueurs.
- * Le preneur choisit une couleur de Roi qu'il ne détient pas en main.
- * En pratique, on affiche les 4 couleurs et on laisse le serveur valider.
- */
+// Sélecteur du Roi appelé (Tarot 5j).
 
 const COULEURS = [
   { couleur: 'Coeur',   label: 'Roi ♥ Cœur',    classe: 'roi-coeur'   },

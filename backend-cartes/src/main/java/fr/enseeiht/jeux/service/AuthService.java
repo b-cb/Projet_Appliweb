@@ -18,9 +18,7 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
     }
 
-    /**
-     * Inscription : crée un nouvel utilisateur avec mot de passe hashé BCrypt.
-     */
+    // Inscription d'un utilisateur.
     public Utilisateur inscrire(String pseudo, String motDePasse) {
         if (utilisateurRepository.findByPseudo(pseudo).isPresent()) {
             throw new BusinessException("Le pseudo '" + pseudo + "' est déjà pris.");
@@ -32,9 +30,7 @@ public class AuthService {
         return utilisateurRepository.save(utilisateur);
     }
 
-    /**
-     * Connexion : vérifie le pseudo et le mot de passe.
-     */
+    // Connexion d'un utilisateur.
     public Utilisateur connexion(String pseudo, String motDePasse) {
         Utilisateur utilisateur = utilisateurRepository.findByPseudo(pseudo)
                 .orElseThrow(() -> new BusinessException("Pseudo ou mot de passe incorrect."));

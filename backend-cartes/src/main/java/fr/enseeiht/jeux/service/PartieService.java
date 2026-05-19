@@ -66,10 +66,7 @@ public class PartieService {
         return partieRepository.save(partie);
     }
 
-    /**
-     * Crée une partie, fait rejoindre les 3 bots, démarre immédiatement,
-     * puis déclenche le jeu automatique si le premier joueur est un bot.
-     */
+    // Crée une partie avec bots.
     public Partie creerEtDemarrerAvecBots(Long utilisateurId) {
         return creerEtDemarrerAvecBots(utilisateurId, 0, 0);
     }
@@ -231,12 +228,7 @@ public class PartieService {
     }
 
     @org.springframework.transaction.annotation.Transactional
-    /**
-     * Crée une partie Tarot avec bots et la démarre immédiatement.
-     * - Tarot 3j : 1 humain + 2 bots (Bot_1, Bot_2)
-     * - Tarot 4j : 1 humain + 3 bots (Bot_1, Bot_2, Bot_3)
-     * - Tarot 5j : 1 humain + 4 bots (Bot_1, Bot_2, Bot_3, Bot_4)
-     */
+    // Crée une partie Tarot avec bots.
     public Partie creerEtDemarrerTarotAvecBots(Long utilisateurId, int nbJoueurs) {
         return creerEtDemarrerTarotAvecBots(utilisateurId, nbJoueurs, 0, 0);
     }
@@ -322,10 +314,7 @@ public class PartieService {
         return partie;
     }
 
-    /**
-     * Redémarre une nouvelle donne Coinche : vide les mains, plis et enchères de la donne précédente
-     * puis redistribue 32 cartes. Les joueurs et scores globaux sont conservés.
-     */
+    // Redémarre une nouvelle donne Coinche.
     @org.springframework.transaction.annotation.Transactional
     public void redemarrerDonneCoinche(Partie partie,
                                        List<Joueur> joueurs,

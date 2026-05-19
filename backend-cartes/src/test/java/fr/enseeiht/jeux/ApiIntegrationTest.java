@@ -21,9 +21,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Tests d'intégration des endpoints REST via MockMvc.
- * Couvre : authentification, gestion des parties, accès protégé.
- * La base H2 en mémoire (application.properties de test) est recréée pour chaque test.
+ * Tests d'intégration des endpoints REST.
  */
 @SpringBootTest
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)

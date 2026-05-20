@@ -2,10 +2,7 @@ package fr.enseeiht.jeux.dto;
 
 import java.util.List;
 
-/**
- * Vue complète de l'état du jeu pour un joueur donné.
- * Retourné par GET /api/partie/{id}/etat?utilisateurId=...
- */
+// Vue complète de l'état du jeu pour un joueur donné.
 public class EtatJeuDTO {
 
     private Long partieId;
@@ -52,8 +49,6 @@ public class EtatJeuDTO {
     private int scoreGlobalB;
 
     public EtatJeuDTO() {}
-
-    // --- Getters / Setters ---
 
     public Long getPartieId() { return partieId; }
     public void setPartieId(Long partieId) { this.partieId = partieId; }
@@ -133,7 +128,6 @@ public class EtatJeuDTO {
     public int getPreneurEquipe() { return preneurEquipe; }
     public void setPreneurEquipe(int preneurEquipe) { this.preneurEquipe = preneurEquipe; }
 
-    // --- Inner DTO : une carte dans le pli courant + qui l'a jouée ---
     public static class CartePliDTO {
         private CarteDTO carte;
         private String pseudo;

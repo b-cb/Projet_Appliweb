@@ -1,7 +1,4 @@
-/**
- * Page de jeu Tarot (3, 4 ou 5 joueurs).
- * Branché depuis GamePage quand typeJeu === 'TAROT'.
- */
+// Page de jeu Tarot.
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/AuthContext'
@@ -19,14 +16,7 @@ const MAX_PLIS = { 3: 24, 4: 18, 5: 15 }
 const SUIT_SYMBOLS = { Coeur: '♥', Carreau: '♦', Trefle: '♣', Pique: '♠', Atout: '★' }
 const BID_LABELS = { PETITE: 'Petite', GARDE: 'Garde', GARDE_SANS: 'Garde sans', GARDE_CONTRE: 'Garde contre' }
 
-/**
- * Positions absolues (en %) pour chaque siège autour de la table Tarot.
- * L'offset 0 = le joueur courant (toujours en bas), puis sens horaire.
- *
- * 3j :  bas-centre | haut-gauche | haut-droite
- * 4j :  bas-centre | gauche      | haut-centre | droite
- * 5j :  bas-centre | bas-gauche  | haut-gauche | haut-droite | bas-droite
- */
+// Positions absolues pour chaque siège.
 const SEAT_POSITIONS = {
   3: [
     { bottom: '6%',  left: '50%',  transform: 'translateX(-50%)' },
@@ -160,7 +150,7 @@ export default function TarotGamePage() {
   }, [partieId, utilisateur])
 
   const handleEnchere = async (typeBid) => {
-    const { ok, data } = await api.enchirirTarot(token, partieId, utilisateur.id, typeBid)
+    const { ok, data } = await api.encherirTarot(token, partieId, utilisateur.id, typeBid)
     if (ok) setEtatJeu(data)
     else afficherFlash(data?.erreur || "Erreur d'enchère.")
   }

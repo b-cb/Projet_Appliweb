@@ -37,8 +37,7 @@ public class Partie {
     private int scoreGlobalA;  // score cumulé de l'équipe A sur toutes les donnes
     private int scoreGlobalB;  // score cumulé de l'équipe B sur toutes les donnes
 
-    // Tarot : sous-phase de jeu (null pour Coinche)
-    // null = enchères, "CHIEN" = phase chien/écart, "JEU" = tricks en cours
+    // Tarot : sous-phase de jeu (CHIEN, JEU).
     private String phaseJeu;
 
     // Tarot : type d'enchère gagnante ("PETITE"|"GARDE"|"GARDE_SANS"|"GARDE_CONTRE")
@@ -64,8 +63,7 @@ public class Partie {
     // Tarot : suivi du Petit au bout
     private boolean petitAuBoutPreneur;
 
-    // Tarot : Poignée déclarée par le preneur avant le premier pli
-    // null = aucune, "SIMPLE" = 20 pts, "DOUBLE" = 30 pts, "TRIPLE" = 40 pts
+    // Tarot : Poignée déclarée par le preneur (SIMPLE, DOUBLE, TRIPLE).
     private String poigneeDeclaree;
 
     // Tarot 5 joueurs : couleur du Roi appelé par le preneur ("Coeur"|"Carreau"|"Trefle"|"Pique")

@@ -1,9 +1,6 @@
 package fr.enseeiht.jeux.dto;
 
-/**
- * Message WebSocket générique poussé sur /topic/partie/{id}.
- * Le champ "type" permet au frontend de dispatcher le bon traitement.
- */
+// Message WebSocket générique.
 public class EvenementJeuDTO {
 
     public enum Type {

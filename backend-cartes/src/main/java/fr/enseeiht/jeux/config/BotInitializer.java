@@ -7,10 +7,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 
-/**
- * Crée les comptes bot au démarrage si absents.
- * Pseudos : Bot_1, Bot_2, Bot_3 — marqués isBot=true.
- */
+// Crée les comptes bot au démarrage si absents.
 @Component
 public class BotInitializer implements ApplicationRunner {
 

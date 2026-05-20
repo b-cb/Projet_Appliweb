@@ -20,8 +20,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Tests unitaires d'AuthService — isolation complète via Mockito.
- * Vérifie la logique d'inscription et de connexion sans base de données.
+ * Tests unitaires d'AuthService.
  */
 @ExtendWith(MockitoExtension.class)
 class AuthServiceTest {

@@ -5,10 +5,7 @@ import org.springframework.boot.web.servlet.ServletRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * Enregistre manuellement la console H2 (Jakarta EE compatible — Spring Boot 4).
- * Accessible sur : http://localhost:8080/h2-console/
- */
+// Enregistre manuellement la console H2.
 @Configuration
 public class H2ConsoleConfig {
 

@@ -1,7 +1,6 @@
 import CardImage from './CardImage'
 
-// Ordre de tri par couleur (groupe): Pique, Coeur, Carreau, Trèfle
-// Puis dans chaque couleur, par force croissante
+// Ordre de tri par couleur (groupe) puis par force croissante.
 const ORDER_COULEUR = ['Pique', 'Coeur', 'Carreau', 'Trefle']
 const ORDER_VALEUR = ['7', '8', '9', 'Valet', 'Dame', 'Roi', '10', 'As']
 

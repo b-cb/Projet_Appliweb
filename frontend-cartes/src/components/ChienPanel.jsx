@@ -1,16 +1,4 @@
-/**
- * Panel de gestion du chien et de l'écart.
- *
- * Phase CHIEN (Petite / Garde) :
- *   - Le chien est montré à tous (zone informative)
- *   - Le preneur sélectionne N cartes à écarter DANS SA MAIN COMPLÈTE
- *     (main d'origine + cartes du chien fusionnées côté backend dans maMain)
- *   - Règles : pas de bouts (Petit/21/Excuse), pas de Rois
- *
- * Phase CHIEN_VU (Garde sans) :
- *   - Le chien est montré à tous, pas d'écart possible
- *   - Seul le preneur peut confirmer
- */
+// Panel de gestion du chien et de l'écart.
 import { useState } from 'react'
 import CardImage from './CardImage'
 

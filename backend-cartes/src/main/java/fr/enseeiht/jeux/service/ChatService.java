@@ -35,9 +35,7 @@ public class ChatService {
         this.messagingTemplate = messagingTemplate;
     }
 
-    /**
-     * Enregistre un message en base et le pousse en temps réel via WebSocket.
-     */
+    // Enregistre et pousse un message.
     public MessageChatDTO envoyerMessage(Long partieId, Long utilisateurId, String contenu) {
         if (contenu == null || contenu.isBlank()) {
             throw new BusinessException("Le message ne peut pas être vide.");
@@ -69,9 +67,7 @@ public class ChatService {
         return dto;
     }
 
-    /**
-     * Retourne l'historique des messages d'une partie (ordre chronologique).
-     */
+    // Retourne l'historique des messages.
     public List<MessageChatDTO> getHistorique(Long partieId) {
         if (!partieRepository.existsById(partieId)) {
             throw new ResourceNotFoundException("Partie #" + partieId + " introuvable.");

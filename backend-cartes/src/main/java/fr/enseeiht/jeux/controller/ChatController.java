@@ -18,11 +18,7 @@ public class ChatController {
         this.chatService = chatService;
     }
 
-    /**
-     * POST /api/partie/{id}/chat?utilisateurId=X
-     * Body : { "contenu": "Belote !" }
-     * Enregistre le message et le pousse en WebSocket.
-     */
+    // Enregistre et pousse un message chat.
     @PostMapping("/{id}/chat")
     public ResponseEntity<MessageChatDTO> envoyerMessage(
             @PathVariable Long id,
@@ -33,10 +29,7 @@ public class ChatController {
         return ResponseEntity.ok(chatService.envoyerMessage(id, utilisateurId, contenu));
     }
 
-    /**
-     * GET /api/partie/{id}/chat
-     * Retourne l'historique des messages de la partie (pour les nouveaux arrivants).
-     */
+    // Retourne l'historique des messages.
     @GetMapping("/{id}/chat")
     public ResponseEntity<List<MessageChatDTO>> getHistorique(@PathVariable Long id) {
         return ResponseEntity.ok(chatService.getHistorique(id));

@@ -1,43 +1,82 @@
--- 1. On vole 5 Atouts au joueur 40 pour vous les donner (39)
+-- ====================================================================
+-- 1. INITIALISATION DES VARIABLES DYNAMIQUES
+-- ====================================================================
+
+-- On trouve l'ID de la partie en cours (la plus récente)
+SET @MaPartie = (
+    SELECT MAX(j.PARTIE_ID) 
+    FROM JOUEUR j 
+    JOIN UTILISATEUR u ON j.UTILISATEUR_ID = u.ID 
+    WHERE u.PSEUDO = 'bati'
+);
+
+-- On récupère TON ID Joueur pour cette partie précise
+SET @MonID = (
+    SELECT j.ID 
+    FROM JOUEUR j 
+    JOIN UTILISATEUR u ON j.UTILISATEUR_ID = u.ID 
+    WHERE u.PSEUDO = 'bati' AND j.PARTIE_ID = @MaPartie
+);
+
+-- On récupère les ID des deux bots/adversaires
+SET @Adversaire1 = (
+    SELECT ID FROM JOUEUR 
+    WHERE PARTIE_ID = @MaPartie AND ID != @MonID 
+    ORDER BY ID ASC 
+    LIMIT 1
+);
+
+SET @Adversaire2 = (
+    SELECT ID FROM JOUEUR 
+    WHERE PARTIE_ID = @MaPartie AND ID != @MonID 
+    ORDER BY ID DESC 
+    LIMIT 1
+);
+
+-- ====================================================================
+-- 2. EXECUTION DES ECHANGES DE CARTES
+-- ====================================================================
+
+-- Vole 5 Atouts à l'Adversaire 1
 UPDATE JOUEUR_CARTE 
-SET JOUEUR_ID = 39 
+SET JOUEUR_ID = @MonID 
 WHERE CARTE_ID IN (
     SELECT jc.CARTE_ID 
     FROM JOUEUR_CARTE jc
     JOIN CARTE c ON jc.CARTE_ID = c.ID
-    WHERE c.COULEUR = 'Atout' AND jc.JOUEUR_ID = 40
+    WHERE c.COULEUR = 'Atout' AND jc.JOUEUR_ID = @Adversaire1
     LIMIT 5
 );
 
--- 2. On rend 5 de vos cartes normales (39) au joueur 40 pour compenser
+-- Rend 5 de tes cartes normales à l'Adversaire 1
 UPDATE JOUEUR_CARTE 
-SET JOUEUR_ID = 40 
+SET JOUEUR_ID = @Adversaire1 
 WHERE CARTE_ID IN (
     SELECT jc.CARTE_ID 
     FROM JOUEUR_CARTE jc
     JOIN CARTE c ON jc.CARTE_ID = c.ID
-    WHERE jc.JOUEUR_ID = 39 AND c.COULEUR != 'Atout'
+    WHERE jc.JOUEUR_ID = @MonID AND c.COULEUR != 'Atout'
     LIMIT 5
 );
 
--- 3. On vole 5 Atouts au joueur 41 pour vous les donner (39)
+-- Vole 5 Atouts à l'Adversaire 2
 UPDATE JOUEUR_CARTE 
-SET JOUEUR_ID = 39 
+SET JOUEUR_ID = @MonID 
 WHERE CARTE_ID IN (
     SELECT jc.CARTE_ID 
     FROM JOUEUR_CARTE jc
     JOIN CARTE c ON jc.CARTE_ID = c.ID
-    WHERE c.COULEUR = 'Atout' AND jc.JOUEUR_ID = 41
+    WHERE c.COULEUR = 'Atout' AND jc.JOUEUR_ID = @Adversaire2
     LIMIT 5
 );
 
--- 4. On rend 5 de vos cartes normales (39) au joueur 41 pour compenser
+-- Rend 5 de tes cartes normales à l'Adversaire 2
 UPDATE JOUEUR_CARTE 
-SET JOUEUR_ID = 41 
+SET JOUEUR_ID = @Adversaire2 
 WHERE CARTE_ID IN (
     SELECT jc.CARTE_ID 
     FROM JOUEUR_CARTE jc
     JOIN CARTE c ON jc.CARTE_ID = c.ID
-    WHERE jc.JOUEUR_ID = 39 AND c.COULEUR != 'Atout'
+    WHERE jc.JOUEUR_ID = @MonID AND c.COULEUR != 'Atout'
     LIMIT 5
 );

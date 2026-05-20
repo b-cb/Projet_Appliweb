@@ -1,0 +1,5 @@
+{
+  "artifactType":  "ARTIFACT_TYPE_OTHER",
+  "summary":  "Deux schémas Mermaid complets du projet :\n1. Schéma ERD de la base de données avec toutes les entités JPA (Utilisateur, Partie, Joueur, Carte, Enchere, Pli, MessageChat, Invitation) et leurs tables de jointure many-to-many.\n2. Schéma d'architecture applicative montrant le frontend React (pages, composants), la couche de communication (REST/HTTP + WebSocket STOMP), le backend Spring Boot (Security, Controllers, Services, Repositories) et la base de données.",
+  "updatedAt":  "2026-05-20T11:27:04.019352791Z"
+}

@@ -26,3 +26,9 @@ replay_pid*
 
 # H2 database files (persistant local)
 backend-cartes/data/
+
+# Local runtime files and environment secrets
+.appliweb.pids
+.env
+.env.*
+!.env.example

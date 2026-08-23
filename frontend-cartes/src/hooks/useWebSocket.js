@@ -15,6 +15,8 @@ export function useWebSocket() {
     const client = new Client({
       brokerURL: WS_URL,
       reconnectDelay: 3000,
+      // TODO SECURITY: transmettre le JWT dans connectHeaders lorsque le backend
+      // validera STOMP CONNECT et autorisera les abonnements aux topics privés.
       onConnect: () => {
         partieAbonneeRef.current = partieId
 
